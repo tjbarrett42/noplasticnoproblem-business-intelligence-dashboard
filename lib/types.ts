@@ -1,5 +1,7 @@
 export type GoalStatus = 'healthy' | 'underperforming' | 'unknown';
 export type CapabilityStatus = 'not-started' | 'partial' | 'built' | 'operational';
+export type OperationStatus = 'not-started' | 'partial' | 'built' | 'operational';
+export type OperationType = 'process' | 'decision' | 'trigger';
 
 export interface GoalNode {
   slug: string;
@@ -28,6 +30,19 @@ export interface CapabilityNode {
   enables: string[];
   system: string[];
   measured: boolean;
+  notes: string;
+  body: string;
+}
+
+export interface OperationNode {
+  slug: string;
+  node: string;
+  type: OperationType;
+  parent: string | null; // null = root, 'unplaced' = orphan, slug = child
+  status: OperationStatus;
+  requires: string[];   // capability slugs
+  skills: string[];     // wiki- skill names
+  outputs: string[];
   notes: string;
   body: string;
 }

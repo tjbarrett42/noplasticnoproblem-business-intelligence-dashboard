@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import type { GoalNode, CapabilityNode } from '@/lib/types';
+import type { GoalNode, CapabilityNode, OperationNode } from '@/lib/types';
 import CausalTree from './CausalTree';
 import CapabilityDAG from './CapabilityDAG';
+import OperationsDAG from './OperationsDAG';
 
-type PermanentTabId = 'goals' | 'capabilities';
+type PermanentTabId = 'goals' | 'capabilities' | 'operations';
 
 interface DynamicTab {
   id: string;
@@ -18,6 +19,7 @@ type TabId = PermanentTabId | string;
 interface Props {
   goals: GoalNode[];
   capabilities: CapabilityNode[];
+  operations: OperationNode[];
 }
 
 /** Returns the capability rooted at rootSlug and all descendants via parent chain. */
@@ -36,11 +38,12 @@ function getSubtree(rootSlug: string, all: CapabilityNode[]): CapabilityNode[] {
   return all.filter((c) => reachable.has(c.slug));
 }
 
-export default function Dashboard({ goals, capabilities }: Props) {
+export default function Dashboard({ goals, capabilities, operations }: Props) {
   const [activeTabId, setActiveTabId] = useState<TabId>('goals');
   const [dynamicTabs, setDynamicTabs] = useState<DynamicTab[]>([]);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
   const [selectedCapability, setSelectedCapability] = useState<string | null>(null);
+  const [selectedOperation, setSelectedOperation] = useState<string | null>(null);
   const [showUnblockedOnly, setShowUnblockedOnly] = useState(false);
 
   const highlightedCapabilities = useMemo<Set<string>>(() => {
@@ -58,6 +61,7 @@ export default function Dashboard({ goals, capabilities }: Props) {
   function handleCapabilityClick(slug: string) {
     setSelectedCapability(slug);
     setSelectedGoal(null);
+    setSelectedOperation(null);
     setActiveTabId('capabilities');
   }
 
@@ -99,6 +103,7 @@ export default function Dashboard({ goals, capabilities }: Props) {
   const globalBlockers = capabilities.filter((c) => c.global_blocker && c.status !== 'operational');
   const activeTab = dynamicTabs.find((t) => t.id === activeTabId);
   const isCapStyle = activeTabId === 'capabilities' || !!activeTab;
+  const definedOps = operations.filter((o) => o.status !== 'not-started').length;
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -140,6 +145,9 @@ export default function Dashboard({ goals, capabilities }: Props) {
             <span>
               <span className="font-semibold text-emerald-600">{unblockedCaps}</span> caps unblocked
             </span>
+            <span>
+              <span className="font-semibold text-teal-600">{definedOps}</span> ops defined
+            </span>
           </div>
         </div>
         <div className="text-xs text-gray-400">reads live from wiki/business/</div>
@@ -177,6 +185,23 @@ export default function Dashboard({ goals, capabilities }: Props) {
           {selectedCapability && activeTabId === 'capabilities' && (
             <span className="ml-2 text-xs bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">
               {selectedCapability}
+            </span>
+          )}
+        </button>
+
+        {/* Permanent: Operations */}
+        <button
+          onClick={() => setActiveTabId('operations')}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            activeTabId === 'operations'
+              ? 'border-teal-500 text-teal-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Operations
+          {selectedOperation && activeTabId === 'operations' && (
+            <span className="ml-2 text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded">
+              {selectedOperation}
             </span>
           )}
         </button>
@@ -265,6 +290,14 @@ export default function Dashboard({ goals, capabilities }: Props) {
             onGoalClick={handleGoalClick}
             showUnblockedOnly={showUnblockedOnly}
             onOpenInTab={openInTab}
+          />
+        )}
+        {activeTabId === 'operations' && (
+          <OperationsDAG
+            operations={operations}
+            selectedOperation={selectedOperation}
+            onSelectOperation={setSelectedOperation}
+            onCapabilityClick={handleCapabilityClick}
           />
         )}
       </div>
