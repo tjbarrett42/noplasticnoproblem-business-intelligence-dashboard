@@ -142,10 +142,17 @@ function buildLayout(
   g.setGraph({ rankdir: 'LR', nodesep: 24, ranksep: 60 });
 
   visibleCaps.forEach((c) => g.setNode(c.slug, { width: NODE_W, height: NODE_H }));
+  // depends_on edges (hard dependency — drives layout rank)
   visibleCaps.forEach((c) => {
     c.depends_on.forEach((dep) => {
       if (visibleSlugs.has(dep)) g.setEdge(dep, c.slug);
     });
+  });
+  // parent edges (hierarchy — also drive layout so parent ranks left of children)
+  visibleCaps.forEach((c) => {
+    if (c.parent && c.parent !== 'unplaced' && visibleSlugs.has(c.parent)) {
+      g.setEdge(c.parent, c.slug);
+    }
   });
 
   dagre.layout(g);
@@ -169,6 +176,7 @@ function buildLayout(
   });
 
   const edges: Edge[] = [];
+  // depends_on edges — solid, highlighted on selection
   visibleCaps.forEach((c) => {
     c.depends_on.forEach((dep) => {
       if (visibleSlugs.has(dep)) {
@@ -178,7 +186,7 @@ function buildLayout(
           highlightedCapabilities.has(c.slug) ||
           highlightedCapabilities.has(dep);
         edges.push({
-          id: `${dep}->${c.slug}`,
+          id: `dep:${dep}->${c.slug}`,
           source: dep,
           target: c.slug,
           markerEnd: { type: MarkerType.ArrowClosed },
@@ -187,6 +195,22 @@ function buildLayout(
         });
       }
     });
+  });
+  // parent edges — dashed, lighter; show hierarchy without implying hard dependency
+  visibleCaps.forEach((c) => {
+    if (c.parent && c.parent !== 'unplaced' && visibleSlugs.has(c.parent)) {
+      // skip if a depends_on edge already exists between the same pair
+      const alreadyHasDep = c.depends_on.includes(c.parent);
+      if (!alreadyHasDep) {
+        edges.push({
+          id: `parent:${c.parent}->${c.slug}`,
+          source: c.parent,
+          target: c.slug,
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: { stroke: '#d1d5db', strokeWidth: 1, strokeDasharray: '5 4' },
+        });
+      }
+    }
   });
 
   return { nodes, edges };
