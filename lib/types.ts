@@ -20,8 +20,9 @@ export interface GoalNode {
 export interface CapabilityNode {
   slug: string;
   node: string;
-  parent: string | null;
+  parent: string | null; // null = root, 'unplaced' = orphan, slug = child
   status: CapabilityStatus;
+  global_blocker: boolean;
   depends_on: string[];
   unlocks: string[];
   enables: string[];

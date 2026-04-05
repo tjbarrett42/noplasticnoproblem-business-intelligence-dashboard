@@ -13,6 +13,7 @@ interface Props {
   onSelectGoal: (node: string | null) => void;
   highlightedGoals: Set<string>; // highlighted because a capability was selected
   onCapabilityClick: (slug: string) => void;
+  onOpenInTab: (slug: string, label: string) => void;
 }
 
 function buildTree(goals: GoalNode[]): TreeNode | null {
@@ -205,6 +206,7 @@ export default function CausalTree({
   onSelectGoal,
   highlightedGoals,
   onCapabilityClick,
+  onOpenInTab,
 }: Props) {
   const tree = useMemo(() => buildTree(goals), [goals]);
 
@@ -281,13 +283,21 @@ export default function CausalTree({
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {selected.requires_capabilities.map((cap) => (
-                    <button
-                      key={cap}
-                      onClick={() => onCapabilityClick(cap)}
-                      className="px-2 py-1 rounded bg-violet-100 text-violet-700 text-xs font-medium hover:bg-violet-200 transition-colors"
-                    >
-                      → {cap}
-                    </button>
+                    <div key={cap} className="flex items-center gap-0.5">
+                      <button
+                        onClick={() => onCapabilityClick(cap)}
+                        className="px-2 py-1 rounded-l bg-violet-100 text-violet-700 text-xs font-medium hover:bg-violet-200 transition-colors"
+                      >
+                        → {cap}
+                      </button>
+                      <button
+                        onClick={() => onOpenInTab(cap, cap)}
+                        className="px-1.5 py-1 rounded-r bg-violet-50 text-violet-500 text-xs hover:bg-violet-100 transition-colors border-l border-violet-200"
+                        title="Open in new tab"
+                      >
+                        ↗
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
