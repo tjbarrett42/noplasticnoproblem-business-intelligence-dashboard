@@ -95,13 +95,19 @@ function NodeCard({
         className={`
           relative cursor-pointer rounded-lg border-2 p-3 w-52 transition-all
           ${goalCardBg(node.status)}
+          ${node.focus ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}
           ${isHighlighted ? 'ring-2 ring-violet-400 ring-offset-1' : ''}
           ${isSelected ? 'shadow-lg shadow-blue-100 border-blue-400' : 'hover:shadow-md'}
         `}
         onClick={() => onSelect(isSelected ? null : node.node)}
       >
-        <div className="font-semibold text-sm text-gray-800 mb-1 leading-tight">
-          {node.node}
+        <div className="flex items-start justify-between mb-1">
+          <div className="font-semibold text-sm text-gray-800 leading-tight">{node.node}</div>
+          {node.focus && (
+            <span className="ml-1 shrink-0 text-xs px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
+              focus
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${goalStatusBadge(node.status)}`}>
@@ -246,9 +252,16 @@ export default function CausalTree({
               </button>
             </div>
 
-            <span className={`text-xs px-2 py-1 rounded font-medium ${goalStatusBadge(selected.status)}`}>
-              {selected.status}
-            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-xs px-2 py-1 rounded font-medium ${goalStatusBadge(selected.status)}`}>
+                {selected.status}
+              </span>
+              {selected.focus && (
+                <span className="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
+                  ▶ current focus
+                </span>
+              )}
+            </div>
 
             {selected.current_value && (
               <div className="mt-3">

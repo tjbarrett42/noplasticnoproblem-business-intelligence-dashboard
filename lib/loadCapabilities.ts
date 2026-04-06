@@ -22,6 +22,7 @@ export function loadCapabilities(): CapabilityNode[] {
       parent: data.parent ?? null,
       status: data.status ?? 'not-started',
       global_blocker: data.global_blocker === true,
+      focus: data.focus === true,
       depends_on: Array.isArray(data.depends_on) ? data.depends_on : [],
       unlocks: Array.isArray(data.unlocks) ? data.unlocks : [],
       enables: Array.isArray(data.enables) ? data.enables : [],

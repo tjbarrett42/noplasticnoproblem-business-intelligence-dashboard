@@ -31,6 +31,7 @@ export function loadGoals(): GoalNode[] {
       requires_capabilities: Array.isArray(data.requires_capabilities)
         ? data.requires_capabilities
         : [],
+      focus: data.focus === true,
       body: content.trim(),
     } as GoalNode;
   });

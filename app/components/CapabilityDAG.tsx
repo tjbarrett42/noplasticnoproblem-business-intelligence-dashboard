@@ -54,6 +54,7 @@ function CapNode({
     isHighlighted: boolean;
     isUnblocked: boolean;
     isGlobalBlocker: boolean;
+    isFocus: boolean;
     onClick: () => void;
   };
 }) {
@@ -74,6 +75,8 @@ function CapNode({
             ? '#7c3aed'
             : blockerActive
             ? '#f97316'
+            : data.isFocus
+            ? '#6366f1'
             : data.isHighlighted
             ? '#8b5cf6'
             : colors.border,
@@ -81,12 +84,19 @@ function CapNode({
             ? '0 0 0 3px #c4b5fd'
             : blockerActive
             ? '0 0 0 2px #fed7aa'
+            : data.isFocus
+            ? '0 0 0 2px #c7d2fe'
             : undefined,
           padding: '10px 12px',
         }}
       >
-        <div className="font-semibold text-xs leading-tight text-gray-800 mb-1.5">
-          {data.label}
+        <div className="flex items-start justify-between mb-1.5">
+          <div className="font-semibold text-xs leading-tight text-gray-800">{data.label}</div>
+          {data.isFocus && (
+            <span className="ml-1 shrink-0 text-xs px-1 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold leading-tight">
+              focus
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span
@@ -129,7 +139,7 @@ function buildLayout(
   selectedCapability: string | null,
   highlightedCapabilities: Set<string>,
   showUnblockedOnly: boolean,
-  onSelectCapability: (slug: string | null) => void
+  onSelectCapability: (slug: string | null) => void,
 ): { nodes: Node[]; edges: Edge[] } {
   const visibleCaps = showUnblockedOnly
     ? placedCaps.filter((c) => isUnblocked(c, allCaps))
@@ -170,6 +180,7 @@ function buildLayout(
         isHighlighted: highlightedCapabilities.has(c.slug),
         isUnblocked: isUnblocked(c, allCaps),
         isGlobalBlocker: c.global_blocker,
+        isFocus: c.focus,
         onClick: () => onSelectCapability(selectedCapability === c.slug ? null : c.slug),
       },
     };
@@ -334,6 +345,11 @@ export default function CapabilityDAG({
               {selected.global_blocker && selected.status !== 'operational' && (
                 <span className="text-xs px-2 py-1 rounded font-medium bg-orange-100 text-orange-800 border border-orange-200">
                   ⚠ global blocker
+                </span>
+              )}
+              {selected.focus && (
+                <span className="text-xs px-2 py-1 rounded-full font-semibold bg-indigo-100 text-indigo-700">
+                  ▶ current focus
                 </span>
               )}
             </div>

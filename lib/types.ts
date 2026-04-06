@@ -16,6 +16,7 @@ export interface GoalNode {
   confidence: string | null;
   status: GoalStatus;
   requires_capabilities: string[];
+  focus: boolean;
   body: string;
 }
 
@@ -25,6 +26,7 @@ export interface CapabilityNode {
   parent: string | null; // null = root, 'unplaced' = orphan, slug = child
   status: CapabilityStatus;
   global_blocker: boolean;
+  focus: boolean;
   depends_on: string[];
   unlocks: string[];
   enables: string[];
