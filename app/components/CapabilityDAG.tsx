@@ -26,6 +26,7 @@ interface Props {
   onGoalClick: (node: string) => void;
   showUnblockedOnly: boolean;
   onOpenInTab: (slug: string, label: string) => void;
+  subtree?: boolean;
 }
 
 const NODE_W = 190;
@@ -55,15 +56,18 @@ function CapNode({
     isUnblocked: boolean;
     isGlobalBlocker: boolean;
     isFocus: boolean;
+    layout: 'LR' | 'TB';
     onClick: () => void;
   };
 }) {
   const colors = statusColors(data.status);
   const blockerActive = data.isGlobalBlocker && data.status !== 'operational';
+  const targetPos = data.layout === 'TB' ? Position.Bottom : Position.Left;
+  const sourcePos = data.layout === 'TB' ? Position.Top : Position.Right;
 
   return (
     <>
-      <Handle type="target" position={Position.Left} style={{ background: '#94a3b8' }} />
+      <Handle type="target" position={targetPos} style={{ background: '#94a3b8' }} />
       <div
         onClick={data.onClick}
         className="cursor-pointer rounded-lg border-2 transition-all"
@@ -117,7 +121,7 @@ function CapNode({
           )}
         </div>
       </div>
-      <Handle type="source" position={Position.Right} style={{ background: '#94a3b8' }} />
+      <Handle type="source" position={sourcePos} style={{ background: '#94a3b8' }} />
     </>
   );
 }
@@ -140,6 +144,7 @@ function buildLayout(
   highlightedCapabilities: Set<string>,
   showUnblockedOnly: boolean,
   onSelectCapability: (slug: string | null) => void,
+  layout: 'LR' | 'TB' = 'LR',
 ): { nodes: Node[]; edges: Edge[] } {
   const visibleCaps = showUnblockedOnly
     ? placedCaps.filter((c) => isUnblocked(c, allCaps))
@@ -149,16 +154,26 @@ function buildLayout(
 
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: 'LR', nodesep: 24, ranksep: 60 });
+  g.setGraph({ rankdir: layout, nodesep: layout === 'TB' ? 40 : 24, ranksep: layout === 'TB' ? 80 : 60 });
 
   visibleCaps.forEach((c) => g.setNode(c.slug, { width: NODE_W, height: NODE_H }));
   // depends_on edges (hard dependency — drives layout rank)
   visibleCaps.forEach((c) => {
     c.depends_on.forEach((dep) => {
-      if (visibleSlugs.has(dep)) g.setEdge(dep, c.slug);
+      if (visibleSlugs.has(dep)) {
+        // In TB (subtree) mode, reverse depends_on edges so the layout reads top-to-bottom
+        // as: goal → last-prerequisite → ... → most-foundational. Nodes are blocked by
+        // what's below them, not above them. Visual arrow direction stays correct (dep→slug).
+        if (layout === 'TB') {
+          g.setEdge(c.slug, dep);
+        } else {
+          g.setEdge(dep, c.slug);
+        }
+      }
     });
   });
-  // parent edges (hierarchy — also drive layout so parent ranks left of children)
+  // parent edges (hierarchy — also drive layout so parent ranks left of children in LR,
+  // and root capability pins at top in TB)
   visibleCaps.forEach((c) => {
     if (c.parent && c.parent !== 'unplaced' && visibleSlugs.has(c.parent)) {
       g.setEdge(c.parent, c.slug);
@@ -181,6 +196,7 @@ function buildLayout(
         isUnblocked: isUnblocked(c, allCaps),
         isGlobalBlocker: c.global_blocker,
         isFocus: c.focus,
+        layout,
         onClick: () => onSelectCapability(selectedCapability === c.slug ? null : c.slug),
       },
     };
@@ -215,8 +231,8 @@ function buildLayout(
       if (!alreadyHasDep) {
         edges.push({
           id: `parent:${c.parent}->${c.slug}`,
-          source: c.parent,
-          target: c.slug,
+          source: layout === 'TB' ? c.slug : c.parent,
+          target: layout === 'TB' ? c.parent : c.slug,
           markerEnd: { type: MarkerType.ArrowClosed },
           style: { stroke: '#d1d5db', strokeWidth: 1, strokeDasharray: '5 4' },
         });
@@ -239,7 +255,9 @@ export default function CapabilityDAG({
   onGoalClick,
   showUnblockedOnly,
   onOpenInTab,
+  subtree = false,
 }: Props) {
+  const layout: 'LR' | 'TB' = subtree ? 'TB' : 'LR';
   const placedCaps = useMemo(
     () => capabilities.filter((c) => c.parent !== 'unplaced'),
     [capabilities]
@@ -261,10 +279,11 @@ export default function CapabilityDAG({
         selectedCapability,
         highlightedCapabilities,
         showUnblockedOnly,
-        onSelectCapability
+        onSelectCapability,
+        layout,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [placedCaps, capabilities, selectedCapability, highlightedCapabilities, showUnblockedOnly]
+    [placedCaps, capabilities, selectedCapability, highlightedCapabilities, showUnblockedOnly, layout]
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);

@@ -279,6 +279,7 @@ export default function Dashboard({ goals, capabilities, operations }: Props) {
             onGoalClick={handleGoalClick}
             showUnblockedOnly={showUnblockedOnly}
             onOpenInTab={openInTab}
+            subtree={true}
           />
         )}
         {activeTab && (
@@ -290,6 +291,7 @@ export default function Dashboard({ goals, capabilities, operations }: Props) {
             onGoalClick={handleGoalClick}
             showUnblockedOnly={showUnblockedOnly}
             onOpenInTab={openInTab}
+            subtree={true}
           />
         )}
         {activeTabId === 'operations' && (
