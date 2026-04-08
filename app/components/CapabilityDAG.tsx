@@ -128,6 +128,11 @@ function CapNode({
 
 const nodeTypes: NodeTypes = { cap: CapNode };
 
+function getParents(parent: CapabilityNode['parent']): string[] {
+  if (!parent || parent === 'unplaced') return [];
+  return Array.isArray(parent) ? parent : [parent];
+}
+
 function isUnblocked(cap: CapabilityNode, all: CapabilityNode[]): boolean {
   if (cap.depends_on.length === 0) return true;
   const statusMap = new Map(all.map((c) => [c.slug, c.status]));
@@ -175,9 +180,11 @@ function buildLayout(
   // parent edges (hierarchy — also drive layout so parent ranks left of children in LR,
   // and root capability pins at top in TB)
   visibleCaps.forEach((c) => {
-    if (c.parent && c.parent !== 'unplaced' && visibleSlugs.has(c.parent)) {
-      g.setEdge(c.parent, c.slug);
-    }
+    getParents(c.parent).forEach((p) => {
+      if (visibleSlugs.has(p)) {
+        g.setEdge(p, c.slug);
+      }
+    });
   });
 
   dagre.layout(g);
@@ -225,19 +232,17 @@ function buildLayout(
   });
   // parent edges — dashed, lighter; show hierarchy without implying hard dependency
   visibleCaps.forEach((c) => {
-    if (c.parent && c.parent !== 'unplaced' && visibleSlugs.has(c.parent)) {
-      // skip if a depends_on edge already exists between the same pair
-      const alreadyHasDep = c.depends_on.includes(c.parent);
-      if (!alreadyHasDep) {
+    getParents(c.parent).forEach((p) => {
+      if (visibleSlugs.has(p) && !c.depends_on.includes(p)) {
         edges.push({
-          id: `parent:${c.parent}->${c.slug}`,
-          source: layout === 'TB' ? c.slug : c.parent,
-          target: layout === 'TB' ? c.parent : c.slug,
+          id: `parent:${p}->${c.slug}`,
+          source: layout === 'TB' ? c.slug : p,
+          target: layout === 'TB' ? p : c.slug,
           markerEnd: { type: MarkerType.ArrowClosed },
           style: { stroke: '#d1d5db', strokeWidth: 1, strokeDasharray: '5 4' },
         });
       }
-    }
+    });
   });
 
   return { nodes, edges };
@@ -381,15 +386,20 @@ export default function CapabilityDAG({
               ↗ Open subtree in new tab
             </button>
 
-            {selected.parent && selected.parent !== 'unplaced' && (
+            {getParents(selected.parent).length > 0 && (
               <div className="mt-3 text-xs text-gray-500">
                 parent:{' '}
-                <button
-                  onClick={() => onSelectCapability(selected.parent as string)}
-                  className="text-gray-700 font-medium hover:underline"
-                >
-                  {selected.parent}
-                </button>
+                {getParents(selected.parent).map((p, i) => (
+                  <React.Fragment key={p}>
+                    {i > 0 && <span className="text-gray-400">, </span>}
+                    <button
+                      onClick={() => onSelectCapability(p)}
+                      className="text-gray-700 font-medium hover:underline"
+                    >
+                      {p}
+                    </button>
+                  </React.Fragment>
+                ))}
               </div>
             )}
             {selected.parent === 'unplaced' && (

@@ -29,7 +29,8 @@ function getSubtree(rootSlug: string, all: CapabilityNode[]): CapabilityNode[] {
   while (changed) {
     changed = false;
     for (const cap of all) {
-      if (!reachable.has(cap.slug) && cap.parent && cap.parent !== 'unplaced' && reachable.has(cap.parent)) {
+      const parents = Array.isArray(cap.parent) ? cap.parent : (cap.parent && cap.parent !== 'unplaced' ? [cap.parent] : []);
+      if (!reachable.has(cap.slug) && parents.some((p) => reachable.has(p))) {
         reachable.add(cap.slug);
         changed = true;
       }

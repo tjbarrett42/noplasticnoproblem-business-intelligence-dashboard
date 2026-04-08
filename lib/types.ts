@@ -23,7 +23,7 @@ export interface GoalNode {
 export interface CapabilityNode {
   slug: string;
   node: string;
-  parent: string | null; // null = root, 'unplaced' = orphan, slug = child
+  parent: string | string[] | null; // null = root, 'unplaced' = orphan, slug = child, string[] = multi-parent
   status: CapabilityStatus;
   global_blocker: boolean;
   focus: boolean;
