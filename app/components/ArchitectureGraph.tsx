@@ -489,7 +489,134 @@ export default function ArchitectureGraph({ archObjects, steps }: Props) {
         </div>
       </div>
 
-      {/* ── Node detail panel ── (Task 7) */}
+      {/* ── Node detail panel ── */}
+      {selectedObject && (
+        <div className="w-80 shrink-0 border-l border-gray-200 bg-white overflow-y-auto">
+          <div className="p-4 border-b border-gray-100">
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                {React.createElement(TYPE_ICONS[selectedObject.type], { size: 14, className: 'text-gray-500 shrink-0 mt-0.5' })}
+                <span className="text-xs text-gray-500">{selectedObject.type}</span>
+              </div>
+              <button
+                onClick={() => setSelectedSlug(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none ml-2 shrink-0"
+              >
+                ×
+              </button>
+            </div>
+            <div className="font-bold text-gray-900 text-sm mb-2">{selectedObject.node}</div>
+            <span className={`text-xs px-2 py-0.5 rounded font-medium ${STATUS_STYLES[selectedObject.status].badge}`}>
+              {selectedObject.status}
+            </span>
+          </div>
+
+          <div className="p-4 space-y-4 text-xs">
+            {/* Blockers */}
+            {selectedObject.blockers.length > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded p-3">
+                <div className="font-semibold text-orange-700 mb-1.5 uppercase tracking-wide text-xs">
+                  Blockers
+                </div>
+                <ul className="space-y-1.5">
+                  {selectedObject.blockers.map((b, i) => (
+                    <li key={i} className="text-orange-800 leading-snug">• {b}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Responsibilities — first paragraph of body */}
+            {selectedObject.body && (
+              <div>
+                <div className="font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                  Responsibilities
+                </div>
+                <p className="text-gray-600 leading-relaxed">
+                  {selectedObject.body.split('\n\n')[0].slice(0, 300)}
+                  {selectedObject.body.split('\n\n')[0].length > 300 ? '…' : ''}
+                </p>
+              </div>
+            )}
+
+            {/* Required by — reverse lookup */}
+            {(() => {
+              const requiredBy = archObjects.filter((o) => o.requires.includes(selectedObject.slug));
+              return requiredBy.length > 0 ? (
+                <div>
+                  <div className="font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                    Required by
+                  </div>
+                  <div className="space-y-1">
+                    {requiredBy.map((o) => (
+                      <button
+                        key={o.slug}
+                        onClick={() => setSelectedSlug(o.slug)}
+                        className="w-full text-left flex items-center gap-1.5 px-2 py-1 rounded hover:bg-gray-50 transition-colors"
+                      >
+                        <span className="text-gray-700 font-medium">{o.node}</span>
+                        <span className={`ml-auto text-xs px-1 py-0.5 rounded ${STATUS_STYLES[o.status].badge}`}>
+                          {o.status}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
+            {/* Part of */}
+            {selectedObject.part_of.length > 0 && (
+              <div>
+                <div className="font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Part of</div>
+                <div className="text-gray-600">{selectedObject.part_of.join(', ')}</div>
+              </div>
+            )}
+
+            {/* Implementation steps — reverse lookup */}
+            {(() => {
+              const touchingSteps = steps.filter((s) => s.architecture.includes(selectedObject.slug));
+              return touchingSteps.length > 0 ? (
+                <div>
+                  <div className="font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                    Implementation steps
+                  </div>
+                  <div className="space-y-1">
+                    {touchingSteps.map((s) => {
+                      const ss = STEP_STATUS_STYLES[s.status];
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => setSelectedStep(selectedStep?.id === s.id ? null : s)}
+                          className="w-full text-left flex items-center gap-1.5 px-2 py-1 rounded hover:bg-gray-50 transition-colors"
+                        >
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${ss.dot}`} />
+                          <span className="text-gray-700 font-medium leading-tight">
+                            {formatStepName(s.id)}
+                          </span>
+                          <span className={`ml-auto text-xs px-1 py-0.5 rounded font-medium ${ss.badge}`}>
+                            {s.status}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
+            {/* Capabilities */}
+            {selectedObject.capabilities.length > 0 && (
+              <div>
+                <div className="font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                  Capabilities
+                </div>
+                <div className="text-gray-600">{selectedObject.capabilities.join(', ')}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
