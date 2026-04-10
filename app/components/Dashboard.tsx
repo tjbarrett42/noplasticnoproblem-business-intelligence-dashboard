@@ -5,6 +5,7 @@ import type { GoalNode, CapabilityNode, ArchitectureObject, ImplementationStep, 
 import CausalTree from './CausalTree';
 import CapabilityDAG from './CapabilityDAG';
 import ArchitectureGraph from './ArchitectureGraph';
+import ProcessGraph from './ProcessGraph';
 
 type PermanentTabId = 'goals' | 'capabilities' | 'processes' | 'architecture';
 
@@ -48,6 +49,7 @@ export default function Dashboard({ goals, capabilities, processes, processSteps
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
   const [selectedCapability, setSelectedCapability] = useState<string | null>(null);
   const [showUnblockedOnly, setShowUnblockedOnly] = useState(false);
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
 
   const highlightedCapabilities = useMemo<Set<string>>(() => {
     if (!selectedGoal) return new Set();
@@ -309,12 +311,20 @@ export default function Dashboard({ goals, capabilities, processes, processSteps
           />
         )}
         {activeTabId === 'processes' && (
-          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-            Process graph coming in next task
-          </div>
+          <ProcessGraph
+            processes={processes}
+            processSteps={processSteps}
+            selectedStepId={selectedStepId}
+            onSelectStep={setSelectedStepId}
+          />
         )}
         {activeTabId === 'architecture' && (
-          <ArchitectureGraph archObjects={archObjects} steps={steps} />
+          <ArchitectureGraph
+            archObjects={archObjects}
+            steps={steps}
+            processes={processes}
+            processSteps={processSteps}
+          />
         )}
       </div>
     </div>
