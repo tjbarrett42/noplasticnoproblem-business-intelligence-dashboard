@@ -5,6 +5,7 @@ import type { GoalNode, CapabilityNode, OperationNode, ArchitectureObject, Imple
 import CausalTree from './CausalTree';
 import CapabilityDAG from './CapabilityDAG';
 import OperationsDAG from './OperationsDAG';
+import ArchitectureGraph from './ArchitectureGraph';
 
 type PermanentTabId = 'goals' | 'capabilities' | 'operations' | 'architecture';
 
@@ -327,9 +328,7 @@ export default function Dashboard({ goals, capabilities, operations, archObjects
           />
         )}
         {activeTabId === 'architecture' && (
-          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-            Architecture tab — coming soon ({archObjects.length} objects, {steps.length} steps)
-          </div>
+          <ArchitectureGraph archObjects={archObjects} steps={steps} />
         )}
       </div>
     </div>
