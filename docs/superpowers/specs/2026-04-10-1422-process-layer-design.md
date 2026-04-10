@@ -85,7 +85,7 @@ actor: user | system | human
 architecture:           # typed interactions with architecture objects
   - {object: <arch-slug>, interaction: reads_from | writes_to | calls}
 processes: []           # reverse link — which process slugs include this step
-status: draft | defined | runnable | deprecated
+status: draft | defined | deprecated
 notes: ""
 ---
 ```
@@ -101,7 +101,7 @@ notes: ""
   - `writes_to` — this step writes or mutates data in the object
   - `calls` — this step invokes the object's interface (e.g., calls an MCP server tool, invokes a pipeline)
 - `processes`: Reverse link — populated when a process includes this step. Maintained manually at session close (same pattern as `architecture: []` on capability nodes).
-- `status`: `runnable` means all referenced architecture objects are at `status: built` or higher. `defined` means the step is fully specified but its architecture prerequisites are not yet built.
+- `status`: Design lifecycle of the step definition. `defined` means fully specified. Runnability is not stored on the file — it is derived at dashboard display time from the current `status` of referenced architecture objects (runnable = all referenced objects are `status: built`).
 
 **Required body sections:**
 
@@ -198,7 +198,7 @@ Users can override any default via the filter/control panel.
 **Process step node (`process-step`):**
 - Rectangle with left-side actor stripe: blue = system, green = user, amber = human
 - Displays: step name, actor label, runnable indicator
-- Runnable indicator: green dot if all referenced architecture objects are `status: built`; amber dot if any are not built; gray dot if no architecture links defined
+- Runnable indicator: green dot if all referenced architecture objects are `status: built`; amber dot if any referenced objects are not yet `built`; gray dot if no architecture links defined
 - Selected state: indigo ring (same as arch tab)
 - Click → step detail panel (see below)
 
@@ -282,7 +282,7 @@ interface ProcessStep {
   actor: 'user' | 'system' | 'human';
   architecture: Array<{ object: string; interaction: 'reads_from' | 'writes_to' | 'calls' }>;
   processes: string[];
-  status: 'draft' | 'defined' | 'runnable' | 'deprecated';
+  status: 'draft' | 'defined' | 'deprecated';
   notes: string;
   body: string;
 }
