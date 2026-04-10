@@ -1,7 +1,9 @@
 # Process Layer Design Spec
 
 **Capability:** wiki-process-layer
-**Implementation repo:** noplasticnoproblem-business-intelligence-dashboard
+**Implementation repos:**
+- `noplasticnoproblem-wiki` — schema (wiki-interface.md v0.3, tree-model.md, capability nodes, ADR, operations deprecation, new processes/ and process-steps/ directories)
+- `noplasticnoproblem-business-intelligence-dashboard` — dashboard (ProcessGraph.tsx, ArchitectureGraph.tsx extensions, loaders, types, Operations tab removal)
 **Wiki build node:** wiki/business/builds/2026-04-10-1422-process-layer.md (created after approval)
 **Date:** 2026-04-10
 
