@@ -1,6 +1,7 @@
 import { loadGoals } from '@/lib/loadGoals';
 import { loadCapabilities } from '@/lib/loadCapabilities';
-import { loadOperations } from '@/lib/loadOperations';
+import { loadProcesses } from '@/lib/loadProcesses';
+import { loadProcessSteps } from '@/lib/loadProcessSteps';
 import { loadArchitectureObjects } from '@/lib/loadArchitectureObjects';
 import { loadImplementationSteps } from '@/lib/loadImplementationSteps';
 import Dashboard from './components/Dashboard';
@@ -11,7 +12,8 @@ export const dynamic = 'force-dynamic';
 export default function Home() {
   const goals = loadGoals();
   const capabilities = loadCapabilities();
-  const operations = loadOperations();
+  const processes = loadProcesses();
+  const processSteps = loadProcessSteps();
   const archObjects = loadArchitectureObjects();
   const steps = loadImplementationSteps();
 
@@ -19,7 +21,8 @@ export default function Home() {
     <Dashboard
       goals={goals}
       capabilities={capabilities}
-      operations={operations}
+      processes={processes}
+      processSteps={processSteps}
       archObjects={archObjects}
       steps={steps}
     />
