@@ -11,8 +11,13 @@ import {
   useEdgesState,
   MarkerType,
   NodeTypes,
+  EdgeTypes,
   Handle,
   Position,
+  BaseEdge,
+  getStraightPath,
+  useInternalNode,
+  type EdgeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
@@ -34,6 +39,12 @@ import type { ArchitectureObject, ImplementationStep, ArchObjectType, ArchObject
 
 const ARCH_NODE_W = 210;
 const ARCH_NODE_H = 78;
+
+// Containment layout constants (for part_of nesting)
+const CONTAINER_PAD_X = 10;       // horizontal inset for child node within parent
+const CONTAINER_PAD_TOP = 10;     // gap between parent header area and first child
+const CONTAINER_PAD_BOTTOM = 10;  // gap below last child
+const CONTAINER_CHILD_GAP = 8;    // gap between sibling children
 
 const TYPE_ICONS: Record<ArchObjectType, LucideIcon> = {
   'data-store': Database,
@@ -63,6 +74,78 @@ const STEP_STATUS_STYLES: Record<StepStatus, { dot: string; badge: string }> = {
   abandoned:   { dot: 'bg-gray-400',   badge: 'bg-gray-100 text-gray-500' },
 };
 
+// ─── Floating edge helpers ────────────────────────────────────────────────────
+
+/**
+ * Returns the point on the border of a rectangle (defined by x, y, width, height)
+ * that lies on the line from the rectangle's center toward `toward`.
+ */
+function getNodeBorderPoint(
+  node: { x: number; y: number; width: number; height: number },
+  toward: { x: number; y: number },
+): { x: number; y: number } {
+  const cx = node.x + node.width / 2;
+  const cy = node.y + node.height / 2;
+  const dx = toward.x - cx;
+  const dy = toward.y - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+  // Scale factor to reach the nearest border in each axis
+  const tx = dx !== 0 ? (node.width / 2) / Math.abs(dx) : Infinity;
+  const ty = dy !== 0 ? (node.height / 2) / Math.abs(dy) : Infinity;
+  const t = Math.min(tx, ty);
+  return { x: cx + dx * t, y: cy + dy * t };
+}
+
+/**
+ * Custom edge that connects from the nearest border point of the source node
+ * to the nearest border point of the target node, ignoring fixed handle positions.
+ * Works correctly for any layout direction and for child nodes nested inside containers.
+ */
+function FloatingEdge({ id, source, target, markerEnd, style, label, labelStyle }: EdgeProps) {
+  const sourceNode = useInternalNode(source);
+  const targetNode = useInternalNode(target);
+
+  if (!sourceNode?.internals.positionAbsolute || !targetNode?.internals.positionAbsolute) {
+    return null;
+  }
+
+  const sw = sourceNode.measured?.width ?? ARCH_NODE_W;
+  const sh = sourceNode.measured?.height ?? ARCH_NODE_H;
+  const tw = targetNode.measured?.width ?? ARCH_NODE_W;
+  const th = targetNode.measured?.height ?? ARCH_NODE_H;
+
+  const sourceBounds = { x: sourceNode.internals.positionAbsolute.x, y: sourceNode.internals.positionAbsolute.y, width: sw, height: sh };
+  const targetBounds = { x: targetNode.internals.positionAbsolute.x, y: targetNode.internals.positionAbsolute.y, width: tw, height: th };
+
+  const sourceCenter = { x: sourceBounds.x + sw / 2, y: sourceBounds.y + sh / 2 };
+  const targetCenter = { x: targetBounds.x + tw / 2, y: targetBounds.y + th / 2 };
+
+  const sourcePoint = getNodeBorderPoint(sourceBounds, targetCenter);
+  const targetPoint = getNodeBorderPoint(targetBounds, sourceCenter);
+
+  const [edgePath, labelX, labelY] = getStraightPath({
+    sourceX: sourcePoint.x,
+    sourceY: sourcePoint.y,
+    targetX: targetPoint.x,
+    targetY: targetPoint.y,
+  });
+
+  return (
+    <BaseEdge
+      id={id}
+      path={edgePath}
+      markerEnd={markerEnd}
+      style={style}
+      label={label}
+      labelX={labelX}
+      labelY={labelY}
+      labelStyle={labelStyle}
+    />
+  );
+}
+
+const archEdgeTypes: EdgeTypes = { floating: FloatingEdge };
+
 // ─── ArchNode custom ReactFlow node ──────────────────────────────────────────
 
 type ArchNodeData = {
@@ -70,23 +153,28 @@ type ArchNodeData = {
   isSelected: boolean;
   isHighlighted: boolean;
   onClick: () => void;
+  containerHeight?: number;
+  containerWidth?: number;
 };
 
 function ArchNode({ data }: { data: ArchNodeData }) {
-  const { object, isSelected, isHighlighted, onClick } = data;
+  const { object, isSelected, isHighlighted, onClick, containerHeight, containerWidth } = data;
   const styles = STATUS_STYLES[object.status];
   const Icon = TYPE_ICONS[object.type];
   const hasBlockers = object.blockers.length > 0;
+  const isContainer = containerHeight !== undefined;
 
   return (
     <>
-      <Handle type="target" position={Position.Left} style={{ background: '#94a3b8' }} />
+      <Handle type="target" position={Position.Left} style={{ opacity: 0, width: 1, height: 1 }} />
       <div
         onClick={onClick}
-        className="cursor-pointer rounded-lg border-2 transition-all relative overflow-hidden"
+        className="cursor-pointer rounded-lg border-2 transition-all relative"
         style={{
-          width: ARCH_NODE_W,
-          minHeight: ARCH_NODE_H,
+          width: containerWidth ?? ARCH_NODE_W,
+          // Container nodes: fixed height so the child area is always visible.
+          // Regular nodes: minHeight only, grows with content.
+          ...(isContainer ? { height: containerHeight } : { minHeight: ARCH_NODE_H, overflow: 'hidden' }),
           background: isHighlighted ? '#fff7ed' : styles.bg,
           borderColor: isSelected
             ? '#6366f1'
@@ -128,8 +216,15 @@ function ArchNode({ data }: { data: ArchNodeData }) {
             ⚠ {object.blockers.length} blocker{object.blockers.length > 1 ? 's' : ''}
           </div>
         )}
+        {/* Dashed separator between parent header and child area */}
+        {isContainer && (
+          <div
+            className="absolute left-3 right-3 border-t border-dashed border-gray-300"
+            style={{ top: ARCH_NODE_H - 4 }}
+          />
+        )}
       </div>
-      <Handle type="source" position={Position.Right} style={{ background: '#94a3b8' }} />
+      <Handle type="source" position={Position.Right} style={{ opacity: 0, width: 1, height: 1 }} />
     </>
   );
 }
@@ -144,6 +239,19 @@ function formatStepName(id: string): string {
 
 // ─── buildArchLayout ──────────────────────────────────────────────────────────
 
+// Returns expanded width/height for a parent container node given its child count.
+function containerDims(childCount: number): { w: number; h: number } {
+  return {
+    w: ARCH_NODE_W + 2 * CONTAINER_PAD_X,
+    h:
+      ARCH_NODE_H +
+      CONTAINER_PAD_TOP +
+      childCount * ARCH_NODE_H +
+      Math.max(0, childCount - 1) * CONTAINER_CHILD_GAP +
+      CONTAINER_PAD_BOTTOM,
+  };
+}
+
 function buildArchLayout(
   objects: ArchitectureObject[],
   selectedSlug: string | null,
@@ -153,46 +261,124 @@ function buildArchLayout(
   onSelectNode: (slug: string | null) => void,
 ): { nodes: Node[]; edges: Edge[] } {
   const slugSet = new Set(objects.map((o) => o.slug));
+
+  // ── Build containment maps from part_of ──────────────────────────────────
+  // childrenOf: parentSlug → ordered list of child slugs
+  // parentOf:   childSlug → parentSlug  (only when parent exists in this dataset)
+  const childrenOf = new Map<string, string[]>();
+  const parentOf = new Map<string, string>();
+  objects.forEach((o) => {
+    o.part_of.forEach((parentSlug) => {
+      if (!slugSet.has(parentSlug)) return;
+      if (!childrenOf.has(parentSlug)) childrenOf.set(parentSlug, []);
+      childrenOf.get(parentSlug)!.push(o.slug);
+      parentOf.set(o.slug, parentSlug);
+    });
+  });
+
+  // Pairs where an edge between them would be redundant with visual containment.
+  const containmentPairs = new Set<string>();
+  parentOf.forEach((parentSlug, childSlug) => {
+    containmentPairs.add(`${childSlug}→${parentSlug}`);
+    containmentPairs.add(`${parentSlug}→${childSlug}`);
+  });
+
+  // ── Dagre layout — top-level nodes only ──────────────────────────────────
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: 'LR', nodesep: 30, ranksep: 70 });
 
-  objects.forEach((o) => g.setNode(o.slug, { width: ARCH_NODE_W, height: ARCH_NODE_H }));
-
-  // Add requires edges to dagre for layout (regardless of toggle — drives rank ordering)
   objects.forEach((o) => {
+    if (parentOf.has(o.slug)) return; // children are positioned relative to parent, not dagre
+    const children = childrenOf.get(o.slug);
+    if (children) {
+      const { w, h } = containerDims(children.length);
+      g.setNode(o.slug, { width: w, height: h });
+    } else {
+      g.setNode(o.slug, { width: ARCH_NODE_W, height: ARCH_NODE_H });
+    }
+  });
+
+  // Add requires edges to dagre for rank ordering.
+  // When the required object is a child, redirect to its parent for layout purposes.
+  objects.forEach((o) => {
+    if (parentOf.has(o.slug)) return; // skip children
     o.requires.forEach((req) => {
-      if (slugSet.has(req)) g.setEdge(req, o.slug);
+      const layoutReq = parentOf.has(req) ? parentOf.get(req)! : req;
+      if (slugSet.has(layoutReq) && layoutReq !== o.slug) g.setEdge(layoutReq, o.slug);
     });
   });
 
   dagre.layout(g);
 
-  const nodes: Node[] = objects.map((o) => {
+  // ── Build ReactFlow nodes ─────────────────────────────────────────────────
+  const nodes: Node[] = [];
+
+  objects.forEach((o) => {
+    if (parentOf.has(o.slug)) return; // handle children separately below
+
+    const children = childrenOf.get(o.slug);
+    const isParent = !!children;
+    const dims = isParent ? containerDims(children!.length) : null;
     const { x, y } = g.node(o.slug);
-    return {
+    const nodeW = dims ? dims.w : ARCH_NODE_W;
+    const nodeH = dims ? dims.h : ARCH_NODE_H;
+
+    nodes.push({
       id: o.slug,
       type: 'arch',
-      position: { x: x - ARCH_NODE_W / 2, y: y - ARCH_NODE_H / 2 },
+      position: { x: x - nodeW / 2, y: y - nodeH / 2 },
+      ...(dims ? { style: { width: dims.w, height: dims.h } } : {}),
       data: {
         object: o,
         isSelected: selectedSlug === o.slug,
         isHighlighted: highlightedSlugs.has(o.slug),
         onClick: () => onSelectNode(selectedSlug === o.slug ? null : o.slug),
+        ...(dims ? { containerHeight: dims.h, containerWidth: dims.w } : {}),
       },
-    };
+    });
+
+    // Position children relative to this parent
+    if (children) {
+      children.forEach((childSlug, idx) => {
+        const childObj = objects.find((c) => c.slug === childSlug)!;
+        nodes.push({
+          id: childSlug,
+          type: 'arch',
+          parentId: o.slug,
+          extent: 'parent',
+          position: {
+            x: CONTAINER_PAD_X,
+            y: ARCH_NODE_H + CONTAINER_PAD_TOP + idx * (ARCH_NODE_H + CONTAINER_CHILD_GAP),
+          },
+          data: {
+            object: childObj,
+            isSelected: selectedSlug === childSlug,
+            isHighlighted: highlightedSlugs.has(childSlug),
+            onClick: () => onSelectNode(selectedSlug === childSlug ? null : childSlug),
+          },
+        });
+      });
+    }
   });
 
+  // ── Build ReactFlow edges ─────────────────────────────────────────────────
   const edges: Edge[] = [];
 
   if (showRequires) {
     objects.forEach((o) => {
       o.requires.forEach((req) => {
         if (!slugSet.has(req)) return;
-        const isActive = selectedSlug === o.slug || selectedSlug === req
-          || highlightedSlugs.has(o.slug) || highlightedSlugs.has(req);
+        // Suppress edges that are redundant with visual containment
+        if (containmentPairs.has(`${o.slug}→${req}`)) return;
+        const isActive =
+          selectedSlug === o.slug ||
+          selectedSlug === req ||
+          highlightedSlugs.has(o.slug) ||
+          highlightedSlugs.has(req);
         edges.push({
           id: `req:${req}->${o.slug}`,
+          type: 'floating',
           source: req,
           target: o.slug,
           markerEnd: { type: MarkerType.ArrowClosed },
@@ -217,8 +403,10 @@ function buildArchLayout(
         const targets = o[field] as string[];
         targets.forEach((target) => {
           if (!slugSet.has(target)) return;
+          if (containmentPairs.has(`${o.slug}→${target}`)) return;
           edges.push({
             id: `${field}:${o.slug}->${target}`,
+            type: 'floating',
             source: o.slug,
             target,
             label,
@@ -475,6 +663,7 @@ export default function ArchitectureGraph({ archObjects, steps }: Props) {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             nodeTypes={archNodeTypes}
+            edgeTypes={archEdgeTypes}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             minZoom={0.3}
