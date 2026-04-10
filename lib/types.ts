@@ -48,3 +48,44 @@ export interface OperationNode {
   notes: string;
   body: string;
 }
+
+export type ArchObjectType =
+  | 'data-store'
+  | 'schema'
+  | 'service'
+  | 'pipeline'
+  | 'interface'
+  | 'library'
+  | 'config';
+
+export type ArchObjectStatus = 'proposed' | 'accepted' | 'built' | 'deprecated';
+
+export type StepStatus = 'ready' | 'blocked' | 'in-progress' | 'done' | 'abandoned';
+
+export interface ArchitectureObject {
+  slug: string;
+  node: string;
+  type: ArchObjectType;
+  status: ArchObjectStatus;
+  capabilities: string[];
+  requires: string[];
+  reads_from: string[];
+  writes_to: string[];
+  calls: string[];
+  part_of: string[];
+  exposes: string[];
+  blockers: string[];
+  notes: string;
+  body: string;
+}
+
+export interface ImplementationStep {
+  id: string;
+  capabilities_supported: string[];
+  architecture: string[];
+  status: StepStatus;
+  blockers: string[];
+  artifacts: { type: string; path: string; repo?: string }[];
+  notes: string;
+  body: string;
+}
