@@ -33,7 +33,7 @@ import {
   ChevronRight,
   type LucideIcon,
 } from 'lucide-react';
-import type { ArchitectureObject, ImplementationStep, ArchObjectType, ArchObjectStatus, StepStatus } from '@/lib/types';
+import type { ArchitectureObject, ImplementationStep, ArchObjectType, ArchObjectStatus, StepStatus, Process, ProcessStep } from '@/lib/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -231,6 +231,34 @@ function ArchNode({ data }: { data: ArchNodeData }) {
 
 const archNodeTypes: NodeTypes = { arch: ArchNode };
 
+// ─── ProcessStepNode for ArchitectureGraph overlay ────────────────────────────
+
+const PROC_STEP_W = 200;
+const PROC_STEP_H = 64;
+
+function ProcessStepNode({ data }: { data: { step: ProcessStep; isSelected: boolean } }) {
+  const { step, isSelected } = data;
+  const stripeColor = step.actor === 'system' ? '#3b82f6' : step.actor === 'user' ? '#22c55e' : '#f59e0b';
+  return (
+    <div
+      className={`relative bg-white rounded border overflow-hidden ${
+        isSelected ? 'border-indigo-500 ring-2 ring-indigo-300' : 'border-blue-200'
+      }`}
+      style={{ width: PROC_STEP_W, height: PROC_STEP_H }}
+    >
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+      <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: stripeColor }} />
+      <div className="pl-3 pr-2 py-1.5 h-full flex flex-col justify-between">
+        <span className="text-xs font-medium text-gray-800 leading-tight line-clamp-2">{step.name}</span>
+        <span className="text-xs text-gray-400">{step.actor}</span>
+      </div>
+    </div>
+  );
+}
+
+const combinedNodeTypes: NodeTypes = { arch: ArchNode, 'process-step': ProcessStepNode as NodeTypes['process-step'] };
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatStepName(id: string): string {
@@ -259,6 +287,9 @@ function buildArchLayout(
   showRequires: boolean,
   showDataFlow: boolean,
   onSelectNode: (slug: string | null) => void,
+  resolvedProcessSteps: ProcessStep[] = [],
+  showProcessSteps = false,
+  showArchObjects = true,
 ): { nodes: Node[]; edges: Edge[] } {
   const slugSet = new Set(objects.map((o) => o.slug));
 
@@ -419,7 +450,56 @@ function buildArchLayout(
     });
   }
 
-  return { nodes, edges };
+  // ── Process step nodes ──────────────────────────────────────────────────────
+  if (showProcessSteps && resolvedProcessSteps.length > 0) {
+    // Add process step nodes to dagre (outside arch containment hierarchy)
+    resolvedProcessSteps.forEach((step) => {
+      if (!g.node(step.id)) {
+        g.setNode(step.id, { width: PROC_STEP_W, height: PROC_STEP_H });
+      }
+    });
+    dagre.layout(g); // re-run layout with step nodes included
+
+    resolvedProcessSteps.forEach((step) => {
+      const pos = g.node(step.id);
+      if (!pos) return;
+      nodes.push({
+        id: step.id,
+        type: 'process-step',
+        position: { x: pos.x - PROC_STEP_W / 2, y: pos.y - PROC_STEP_H / 2 },
+        data: { step, isSelected: step.id === selectedSlug },
+      });
+    });
+
+    // Bridge edges: process step → architecture object
+    if (showArchObjects) {
+      const visibleArchIds = new Set(objects.map((o) => o.slug));
+      resolvedProcessSteps.forEach((step) => {
+        step.architecture.forEach((link) => {
+          if (!visibleArchIds.has(link.object)) return;
+          const interactionColor =
+            link.interaction === 'reads_from' ? '#3b82f6'
+            : link.interaction === 'writes_to' ? '#f97316'
+            : '#a855f7';
+          edges.push({
+            id: `bridge-${step.id}-${link.object}-${link.interaction}`,
+            source: step.id,
+            target: link.object,
+            type: 'floating',
+            style: { stroke: interactionColor, strokeWidth: 1, strokeDasharray: '4 3' },
+            markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: interactionColor },
+            data: { edgeType: 'bridge', interaction: link.interaction },
+          });
+        });
+      });
+    }
+  }
+
+  // Filter arch nodes if showArchObjects is false
+  const finalNodes = showArchObjects ? nodes : nodes.filter((n) => n.type === 'process-step');
+  const finalEdges = showArchObjects ? edges : edges.filter((e) => e.id.startsWith('bridge-'));
+
+  return { nodes: finalNodes, edges: finalEdges };
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -427,14 +507,21 @@ function buildArchLayout(
 interface Props {
   archObjects: ArchitectureObject[];
   steps: ImplementationStep[];
+  processes?: Process[];
+  processSteps?: ProcessStep[];
+  defaultShowProcessSteps?: boolean;
+  defaultShowArchObjects?: boolean;
 }
 
-export default function ArchitectureGraph({ archObjects, steps }: Props) {
+export default function ArchitectureGraph({ archObjects, steps, processes, processSteps, defaultShowProcessSteps, defaultShowArchObjects }: Props) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [selectedStep, setSelectedStep] = useState<ImplementationStep | null>(null);
   const [stepListCollapsed, setStepListCollapsed] = useState(false);
   const [showRequires, setShowRequires] = useState(true);
   const [showDataFlow, setShowDataFlow] = useState(false);
+  const [showProcessSteps, setShowProcessSteps] = useState(defaultShowProcessSteps ?? false);
+  const [showArchObjects, setShowArchObjects] = useState(defaultShowArchObjects ?? true);
+  const [selectedProcessIds, setSelectedProcessIds] = useState<string[]>([]);
 
   const highlightedSlugs = useMemo(
     () => (selectedStep ? new Set(selectedStep.architecture) : new Set<string>()),
@@ -445,6 +532,12 @@ export default function ArchitectureGraph({ archObjects, steps }: Props) {
     ? archObjects.find((o) => o.slug === selectedSlug) ?? null
     : null;
 
+  const resolvedProcessSteps = useMemo(() => {
+    const allSteps = processSteps ?? [];
+    if (selectedProcessIds.length === 0) return allSteps;
+    return allSteps.filter((s) => s.processes.some((p) => selectedProcessIds.includes(p)));
+  }, [processSteps, selectedProcessIds]);
+
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(
     () =>
       buildArchLayout(
@@ -454,8 +547,11 @@ export default function ArchitectureGraph({ archObjects, steps }: Props) {
         showRequires,
         showDataFlow,
         setSelectedSlug,
+        resolvedProcessSteps,
+        showProcessSteps,
+        showArchObjects,
       ),
-    [archObjects, selectedSlug, highlightedSlugs, showRequires, showDataFlow],
+    [archObjects, selectedSlug, highlightedSlugs, showRequires, showDataFlow, resolvedProcessSteps, showProcessSteps, showArchObjects],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
@@ -632,7 +728,48 @@ export default function ArchitectureGraph({ archObjects, steps }: Props) {
       {/* ── Graph area ── */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Graph toolbar */}
-        <div className="shrink-0 bg-white border-b border-gray-200 px-4 py-1.5 flex items-center gap-4">
+        <div className="shrink-0 bg-white border-b border-gray-200 px-4 py-1.5 flex items-center gap-4 flex-wrap">
+          {/* Layer toggles */}
+          <div className="flex items-center gap-1 border-r border-gray-200 pr-3">
+            <span className="text-xs text-gray-500 mr-1">Layers:</span>
+            <button
+              onClick={() => setShowArchObjects((v) => !v)}
+              className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                showArchObjects ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-600 border-gray-300'
+              }`}
+            >
+              Architecture
+            </button>
+            <button
+              onClick={() => setShowProcessSteps((v) => !v)}
+              className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                showProcessSteps ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300'
+              }`}
+            >
+              Process steps
+            </button>
+          </div>
+
+          {/* Process selector */}
+          {showProcessSteps && processes && processes.length > 0 && (
+            <div className="flex items-center gap-1 border-r border-gray-200 pr-3">
+              <span className="text-xs text-gray-500 mr-1">Process:</span>
+              <select
+                value={selectedProcessIds[0] ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSelectedProcessIds(v ? [v] : []);
+                }}
+                className="text-xs border border-gray-300 rounded px-1 py-0.5 bg-white"
+              >
+                <option value="">All processes</option>
+                {processes.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -662,7 +799,7 @@ export default function ArchitectureGraph({ archObjects, steps }: Props) {
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            nodeTypes={archNodeTypes}
+            nodeTypes={combinedNodeTypes}
             edgeTypes={archEdgeTypes}
             fitView
             fitViewOptions={{ padding: 0.2 }}

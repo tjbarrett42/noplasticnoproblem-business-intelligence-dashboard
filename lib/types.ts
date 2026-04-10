@@ -49,6 +49,49 @@ export interface OperationNode {
   body: string;
 }
 
+export type ProcessStepStatus = 'draft' | 'defined' | 'deprecated';
+export type ProcessStatus = 'draft' | 'defined' | 'active' | 'deprecated';
+export type ProcessTrigger = 'user-action' | 'schedule' | 'event' | 'subprocess';
+export type StepActor = 'user' | 'system' | 'human';
+export type ArchInteractionType = 'reads_from' | 'writes_to' | 'calls';
+
+export interface ArchInteractionLink {
+  object: string;
+  interaction: ArchInteractionType;
+}
+
+export interface ProcessStepRef {
+  type: 'step';
+  ref: string;
+}
+
+export interface SubprocessRef {
+  type: 'subprocess';
+  ref: string;
+}
+
+export interface ProcessStep {
+  id: string;
+  name: string;
+  actor: StepActor;
+  architecture: ArchInteractionLink[];
+  processes: string[];
+  status: ProcessStepStatus;
+  notes: string;
+  body: string;
+}
+
+export interface Process {
+  id: string;
+  name: string;
+  trigger: ProcessTrigger;
+  capabilities: string[];
+  steps: Array<ProcessStepRef | SubprocessRef>;
+  status: ProcessStatus;
+  notes: string;
+  body: string;
+}
+
 export type ArchObjectType =
   | 'data-store'
   | 'schema'

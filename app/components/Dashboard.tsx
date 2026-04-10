@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import type { GoalNode, CapabilityNode, OperationNode, ArchitectureObject, ImplementationStep } from '@/lib/types';
+import type { GoalNode, CapabilityNode, ArchitectureObject, ImplementationStep, Process, ProcessStep } from '@/lib/types';
 import CausalTree from './CausalTree';
 import CapabilityDAG from './CapabilityDAG';
-import OperationsDAG from './OperationsDAG';
 import ArchitectureGraph from './ArchitectureGraph';
+import ProcessGraph from './ProcessGraph';
 
-type PermanentTabId = 'goals' | 'capabilities' | 'operations' | 'architecture';
+type PermanentTabId = 'goals' | 'capabilities' | 'processes' | 'architecture';
 
 interface DynamicTab {
   id: string;
@@ -20,7 +20,8 @@ type TabId = PermanentTabId | string;
 interface Props {
   goals: GoalNode[];
   capabilities: CapabilityNode[];
-  operations: OperationNode[];
+  processes: Process[];
+  processSteps: ProcessStep[];
   archObjects: ArchitectureObject[];
   steps: ImplementationStep[];
 }
@@ -42,13 +43,13 @@ function getSubtree(rootSlug: string, all: CapabilityNode[]): CapabilityNode[] {
   return all.filter((c) => reachable.has(c.slug));
 }
 
-export default function Dashboard({ goals, capabilities, operations, archObjects, steps }: Props) {
+export default function Dashboard({ goals, capabilities, processes, processSteps, archObjects, steps }: Props) {
   const [activeTabId, setActiveTabId] = useState<TabId>('goals');
   const [dynamicTabs, setDynamicTabs] = useState<DynamicTab[]>([]);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
   const [selectedCapability, setSelectedCapability] = useState<string | null>(null);
-  const [selectedOperation, setSelectedOperation] = useState<string | null>(null);
   const [showUnblockedOnly, setShowUnblockedOnly] = useState(false);
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
 
   const highlightedCapabilities = useMemo<Set<string>>(() => {
     if (!selectedGoal) return new Set();
@@ -65,7 +66,6 @@ export default function Dashboard({ goals, capabilities, operations, archObjects
   function handleCapabilityClick(slug: string) {
     setSelectedCapability(slug);
     setSelectedGoal(null);
-    setSelectedOperation(null);
     setActiveTabId('capabilities');
   }
 
@@ -107,7 +107,6 @@ export default function Dashboard({ goals, capabilities, operations, archObjects
   const globalBlockers = capabilities.filter((c) => c.global_blocker && c.status !== 'operational');
   const activeTab = dynamicTabs.find((t) => t.id === activeTabId);
   const isCapStyle = activeTabId === 'capabilities' || !!activeTab;
-  const definedOps = operations.filter((o) => o.status !== 'not-started').length;
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -148,9 +147,6 @@ export default function Dashboard({ goals, capabilities, operations, archObjects
             </span>
             <span>
               <span className="font-semibold text-emerald-600">{unblockedCaps}</span> caps unblocked
-            </span>
-            <span>
-              <span className="font-semibold text-teal-600">{definedOps}</span> ops defined
             </span>
             <span>
               <span className="font-semibold text-indigo-600">{archObjects.length}</span> arch objects
@@ -202,21 +198,16 @@ export default function Dashboard({ goals, capabilities, operations, archObjects
           )}
         </button>
 
-        {/* Permanent: Operations */}
+        {/* Permanent: Processes */}
         <button
-          onClick={() => setActiveTabId('operations')}
+          onClick={() => setActiveTabId('processes')}
           className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-            activeTabId === 'operations'
+            activeTabId === 'processes'
               ? 'border-teal-500 text-teal-600'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          Operations
-          {selectedOperation && activeTabId === 'operations' && (
-            <span className="ml-2 text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded">
-              {selectedOperation}
-            </span>
-          )}
+          Processes
         </button>
 
         {/* Permanent: Architecture */}
@@ -319,16 +310,21 @@ export default function Dashboard({ goals, capabilities, operations, archObjects
             subtree={true}
           />
         )}
-        {activeTabId === 'operations' && (
-          <OperationsDAG
-            operations={operations}
-            selectedOperation={selectedOperation}
-            onSelectOperation={setSelectedOperation}
-            onCapabilityClick={handleCapabilityClick}
+        {activeTabId === 'processes' && (
+          <ProcessGraph
+            processes={processes}
+            processSteps={processSteps}
+            selectedStepId={selectedStepId}
+            onSelectStep={setSelectedStepId}
           />
         )}
         {activeTabId === 'architecture' && (
-          <ArchitectureGraph archObjects={archObjects} steps={steps} />
+          <ArchitectureGraph
+            archObjects={archObjects}
+            steps={steps}
+            processes={processes}
+            processSteps={processSteps}
+          />
         )}
       </div>
     </div>
