@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import type { GoalNode, CapabilityNode, OperationNode } from '@/lib/types';
+import type { GoalNode, CapabilityNode, OperationNode, ArchitectureObject, ImplementationStep } from '@/lib/types';
 import CausalTree from './CausalTree';
 import CapabilityDAG from './CapabilityDAG';
 import OperationsDAG from './OperationsDAG';
 
-type PermanentTabId = 'goals' | 'capabilities' | 'operations';
+type PermanentTabId = 'goals' | 'capabilities' | 'operations' | 'architecture';
 
 interface DynamicTab {
   id: string;
@@ -20,6 +20,8 @@ interface Props {
   goals: GoalNode[];
   capabilities: CapabilityNode[];
   operations: OperationNode[];
+  archObjects: ArchitectureObject[];
+  steps: ImplementationStep[];
 }
 
 /** Returns the capability rooted at rootSlug and all descendants via parent chain. */
@@ -39,7 +41,7 @@ function getSubtree(rootSlug: string, all: CapabilityNode[]): CapabilityNode[] {
   return all.filter((c) => reachable.has(c.slug));
 }
 
-export default function Dashboard({ goals, capabilities, operations }: Props) {
+export default function Dashboard({ goals, capabilities, operations, archObjects, steps }: Props) {
   const [activeTabId, setActiveTabId] = useState<TabId>('goals');
   const [dynamicTabs, setDynamicTabs] = useState<DynamicTab[]>([]);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
@@ -149,6 +151,15 @@ export default function Dashboard({ goals, capabilities, operations }: Props) {
             <span>
               <span className="font-semibold text-teal-600">{definedOps}</span> ops defined
             </span>
+            <span>
+              <span className="font-semibold text-indigo-600">{archObjects.length}</span> arch objects
+            </span>
+            <span>
+              <span className="font-semibold text-teal-600">
+                {archObjects.filter((a) => a.status === 'accepted' || a.status === 'built').length}
+              </span>{' '}
+              accepted
+            </span>
           </div>
         </div>
         <div className="text-xs text-gray-400">reads live from wiki/business/</div>
@@ -205,6 +216,18 @@ export default function Dashboard({ goals, capabilities, operations }: Props) {
               {selectedOperation}
             </span>
           )}
+        </button>
+
+        {/* Permanent: Architecture */}
+        <button
+          onClick={() => setActiveTabId('architecture')}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            activeTabId === 'architecture'
+              ? 'border-indigo-500 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Architecture
         </button>
 
         {/* Dynamic tabs */}
@@ -302,6 +325,11 @@ export default function Dashboard({ goals, capabilities, operations }: Props) {
             onSelectOperation={setSelectedOperation}
             onCapabilityClick={handleCapabilityClick}
           />
+        )}
+        {activeTabId === 'architecture' && (
+          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+            Architecture tab — coming soon ({archObjects.length} objects, {steps.length} steps)
+          </div>
         )}
       </div>
     </div>
