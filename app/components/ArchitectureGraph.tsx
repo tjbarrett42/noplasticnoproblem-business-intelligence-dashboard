@@ -614,6 +614,64 @@ function buildArchLayout(
   return { nodes: finalNodes, edges: finalEdges };
 }
 
+// ─── TimelineBar ─────────────────────────────────────────────────────────────
+
+function TimelineBar({
+  process: proc,
+  orderedSteps,
+  selectedNodeId,
+  onSelectStep,
+}: {
+  process: Process;
+  orderedSteps: ProcessStep[];
+  selectedNodeId: string | null;
+  onSelectStep: (id: string) => void;
+}) {
+  const stripeColor = (actor: StepActor) =>
+    actor === 'system' ? '#3b82f6' : actor === 'user' ? '#22c55e' : '#f59e0b';
+
+  return (
+    <div
+      className="shrink-0 border-t border-gray-200 bg-white overflow-x-auto"
+      style={{ height: 36 }}
+    >
+      <div className="flex items-center h-full px-3 gap-1 min-w-max">
+        {/* Process label */}
+        <span className="text-xs font-semibold text-gray-400 mr-2 shrink-0 whitespace-nowrap">
+          {proc.name} ▸
+        </span>
+        {orderedSteps.map((step) => {
+          const ActorIcon = ACTOR_ICONS[step.actor];
+          const isActive = selectedNodeId === step.id;
+          return (
+            <button
+              key={step.id}
+              onClick={() => onSelectStep(step.id)}
+              title={step.name}
+              className="flex items-center gap-1 h-6 pl-0 pr-2 rounded overflow-hidden shrink-0 transition-colors"
+              style={{
+                background: isActive ? '#4f46e5' : '#f9fafb',
+                border: `1px solid ${isActive ? '#4f46e5' : '#e5e7eb'}`,
+                maxWidth: 140,
+              }}
+            >
+              {/* Color stripe */}
+              <div className="w-1 self-stretch shrink-0" style={{ backgroundColor: stripeColor(step.actor) }} />
+              <ActorIcon size={10} className="shrink-0 ml-1.5" style={{ color: isActive ? 'white' : stripeColor(step.actor) }} />
+              <span
+                className="text-[10px] font-medium truncate ml-0.5"
+                style={{ color: isActive ? 'white' : '#374151' }}
+              >
+                {step.name}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface Props {
@@ -666,6 +724,11 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
       .map((s) => allSteps.find((ps) => ps.id === s.ref))
       .filter((s): s is ProcessStep => s !== undefined);
   }, [processes, processSteps, selectedProcessIds]);
+
+  const singleSelectedProcess = useMemo(() => {
+    if (selectedProcessIds.length !== 1) return null;
+    return (processes ?? []).find((p) => p.id === selectedProcessIds[0]) ?? null;
+  }, [processes, selectedProcessIds]);
 
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(
     () =>
@@ -934,6 +997,15 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
             <Controls showInteractive={false} />
           </ReactFlow>
         </div>
+        {/* Timeline bar */}
+        {singleSelectedProcess && showProcessSteps && orderedProcessSteps.length > 0 && (
+          <TimelineBar
+            process={singleSelectedProcess}
+            orderedSteps={orderedProcessSteps}
+            selectedNodeId={selectedNodeId}
+            onSelectStep={(id) => setSelectedNodeId(selectedNodeId === id ? null : id)}
+          />
+        )}
       </div>
 
       {/* ── Node detail panel ── */}
