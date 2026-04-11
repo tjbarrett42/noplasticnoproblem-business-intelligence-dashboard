@@ -354,13 +354,15 @@ function containerDims(childCount: number): { w: number; h: number } {
 
 function buildArchLayout(
   objects: ArchitectureObject[],
-  selectedSlug: string | null,
-  highlightedSlugs: Set<string>,
+  selectedNodeId: string | null,
+  highlightedArchSlugs: Set<string>,
+  highlightedStepSlugs: Set<string>,
   showRequires: boolean,
-  onSelectNode: (slug: string | null) => void,
-  resolvedProcessSteps: ProcessStep[] = [],
-  showProcessSteps = false,
-  showArchObjects = true,
+  onSelectNode: (id: string | null) => void,
+  resolvedProcessSteps: ProcessStep[],
+  orderedProcessSteps: ProcessStep[],
+  showProcessSteps: boolean,
+  showArchObjects: boolean,
 ): { nodes: Node[]; edges: Edge[] } {
   const slugSet = new Set(objects.map((o) => o.slug));
 
@@ -384,6 +386,17 @@ function buildArchLayout(
     containmentPairs.add(`${childSlug}→${parentSlug}`);
     containmentPairs.add(`${parentSlug}→${childSlug}`);
   });
+
+  // ── Dimming: compute which arch slugs are touched by visible process steps ──
+  const touchedArchSlugs = new Set<string>();
+  if (showProcessSteps && resolvedProcessSteps.length > 0) {
+    resolvedProcessSteps.forEach((step) => {
+      step.architecture.forEach((link) => {
+        if (slugSet.has(link.object)) touchedArchSlugs.add(link.object);
+      });
+    });
+  }
+  const shouldDim = showProcessSteps && resolvedProcessSteps.length > 0 && highlightedArchSlugs.size === 0;
 
   // ── Dagre layout — top-level nodes only ──────────────────────────────────
   const g = new dagre.graphlib.Graph();
@@ -411,6 +424,37 @@ function buildArchLayout(
     });
   });
 
+  // ── Add process step nodes and edges to dagre BEFORE layout ───────────────
+  if (showProcessSteps && resolvedProcessSteps.length > 0) {
+    // Add step nodes to dagre
+    resolvedProcessSteps.forEach((step) => {
+      if (!g.hasNode(step.id)) {
+        g.setNode(step.id, { width: PROC_STEP_W, height: PROC_STEP_H });
+      }
+    });
+    // Add interaction edges to dagre (drives positioning)
+    resolvedProcessSteps.forEach((step) => {
+      step.architecture.forEach((link) => {
+        const archSlug = parentOf.has(link.object) ? parentOf.get(link.object)! : link.object;
+        if (!slugSet.has(archSlug)) return;
+        if (link.interaction === 'reads_from') {
+          g.setEdge(archSlug, step.id);
+        } else {
+          // writes_to, calls: step → arch
+          g.setEdge(step.id, archSlug);
+        }
+      });
+    });
+    // Add sequence edges to dagre (ordering signal)
+    orderedProcessSteps.forEach((step, idx) => {
+      if (idx >= orderedProcessSteps.length - 1) return;
+      const next = orderedProcessSteps[idx + 1];
+      if (g.hasNode(step.id) && g.hasNode(next.id)) {
+        g.setEdge(step.id, next.id);
+      }
+    });
+  }
+
   dagre.layout(g);
 
   // ── Build ReactFlow nodes ─────────────────────────────────────────────────
@@ -433,9 +477,10 @@ function buildArchLayout(
       ...(dims ? { style: { width: dims.w, height: dims.h } } : {}),
       data: {
         object: o,
-        isSelected: selectedSlug === o.slug,
-        isHighlighted: highlightedSlugs.has(o.slug),
-        onClick: () => onSelectNode(selectedSlug === o.slug ? null : o.slug),
+        isSelected: selectedNodeId === o.slug,
+        isHighlighted: highlightedArchSlugs.has(o.slug),
+        isDimmed: shouldDim && !touchedArchSlugs.has(o.slug),
+        onClick: () => onSelectNode(selectedNodeId === o.slug ? null : o.slug),
         ...(dims ? { containerHeight: dims.h, containerWidth: dims.w } : {}),
       },
     });
@@ -455,9 +500,10 @@ function buildArchLayout(
           },
           data: {
             object: childObj,
-            isSelected: selectedSlug === childSlug,
-            isHighlighted: highlightedSlugs.has(childSlug),
-            onClick: () => onSelectNode(selectedSlug === childSlug ? null : childSlug),
+            isSelected: selectedNodeId === childSlug,
+            isHighlighted: highlightedArchSlugs.has(childSlug),
+            isDimmed: shouldDim && !touchedArchSlugs.has(childSlug),
+            onClick: () => onSelectNode(selectedNodeId === childSlug ? null : childSlug),
           },
         });
       });
@@ -474,10 +520,10 @@ function buildArchLayout(
         // Suppress edges that are redundant with visual containment
         if (containmentPairs.has(`${o.slug}→${req}`)) return;
         const isActive =
-          selectedSlug === o.slug ||
-          selectedSlug === req ||
-          highlightedSlugs.has(o.slug) ||
-          highlightedSlugs.has(req);
+          selectedNodeId === o.slug ||
+          selectedNodeId === req ||
+          highlightedArchSlugs.has(o.slug) ||
+          highlightedArchSlugs.has(req);
         edges.push({
           id: `req:${req}->${o.slug}`,
           type: 'floating',
@@ -494,16 +540,8 @@ function buildArchLayout(
     });
   }
 
-  // ── Process step nodes ──────────────────────────────────────────────────────
+  // ── Process step ReactFlow nodes ─────────────────────────────────────────────
   if (showProcessSteps && resolvedProcessSteps.length > 0) {
-    // Add process step nodes to dagre (outside arch containment hierarchy)
-    resolvedProcessSteps.forEach((step) => {
-      if (!g.node(step.id)) {
-        g.setNode(step.id, { width: PROC_STEP_W, height: PROC_STEP_H });
-      }
-    });
-    dagre.layout(g); // re-run layout with step nodes included
-
     resolvedProcessSteps.forEach((step) => {
       const pos = g.node(step.id);
       if (!pos) return;
@@ -511,37 +549,60 @@ function buildArchLayout(
         id: step.id,
         type: 'process-step',
         position: { x: pos.x - PROC_STEP_W / 2, y: pos.y - PROC_STEP_H / 2 },
-        data: { step, isSelected: step.id === selectedSlug },
+        data: {
+          step,
+          isSelected: selectedNodeId === step.id,
+          isHighlighted: highlightedStepSlugs.has(step.id),
+          onSelect: () => onSelectNode(selectedNodeId === step.id ? null : step.id),
+        },
+      });
+    });
+  }
+
+  // ── Interaction and sequence ReactFlow edges ──────────────────────────────────
+  if (showProcessSteps && resolvedProcessSteps.length > 0 && showArchObjects) {
+    const visibleArchIds = new Set(objects.map((o) => o.slug));
+    resolvedProcessSteps.forEach((step) => {
+      step.architecture.forEach((link) => {
+        if (!visibleArchIds.has(link.object)) return;
+        const color =
+          link.interaction === 'reads_from' ? '#3b82f6'
+          : link.interaction === 'writes_to' ? '#22c55e'
+          : '#a855f7';
+        const [src, tgt] =
+          link.interaction === 'reads_from'
+            ? [link.object, step.id]
+            : [step.id, link.object];
+        edges.push({
+          id: `interact:${step.id}-${link.object}-${link.interaction}`,
+          type: 'floating',
+          source: src,
+          target: tgt,
+          markerEnd: { type: MarkerType.ArrowClosed, color, width: 10, height: 10 },
+          style: { stroke: color, strokeWidth: 1.5 },
+        });
       });
     });
 
-    // Bridge edges: process step → architecture object
-    if (showArchObjects) {
-      const visibleArchIds = new Set(objects.map((o) => o.slug));
-      resolvedProcessSteps.forEach((step) => {
-        step.architecture.forEach((link) => {
-          if (!visibleArchIds.has(link.object)) return;
-          const interactionColor =
-            link.interaction === 'reads_from' ? '#3b82f6'
-            : link.interaction === 'writes_to' ? '#f97316'
-            : '#a855f7';
-          edges.push({
-            id: `bridge-${step.id}-${link.object}-${link.interaction}`,
-            source: step.id,
-            target: link.object,
-            type: 'floating',
-            style: { stroke: interactionColor, strokeWidth: 1, strokeDasharray: '4 3' },
-            markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: interactionColor },
-            data: { edgeType: 'bridge', interaction: link.interaction },
-          });
-        });
+    // Sequence edges (step → step, visually quiet)
+    orderedProcessSteps.forEach((step, idx) => {
+      if (idx >= orderedProcessSteps.length - 1) return;
+      const next = orderedProcessSteps[idx + 1];
+      edges.push({
+        id: `seq:${step.id}->${next.id}`,
+        type: 'floating',
+        source: step.id,
+        target: next.id,
+        style: { stroke: '#e5e7eb', strokeWidth: 1, strokeDasharray: '4 3' },
       });
-    }
+    });
   }
 
   // Filter arch nodes if showArchObjects is false
   const finalNodes = showArchObjects ? nodes : nodes.filter((n) => n.type === 'process-step');
-  const finalEdges = showArchObjects ? edges : edges.filter((e) => e.id.startsWith('bridge-'));
+  const finalEdges = showArchObjects
+    ? edges
+    : edges.filter((e) => e.id.startsWith('interact:') || e.id.startsWith('seq:'));
 
   return { nodes: finalNodes, edges: finalEdges };
 }
@@ -566,10 +627,12 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
   const [showArchObjects, setShowArchObjects] = useState(defaultShowArchObjects ?? true);
   const [selectedProcessIds, setSelectedProcessIds] = useState<string[]>([]);
 
-  const highlightedSlugs = useMemo(
+  const highlightedArchSlugs = useMemo(
     () => (selectedStep ? new Set(selectedStep.architecture) : new Set<string>()),
     [selectedStep],
   );
+
+  const highlightedStepSlugs = useMemo(() => new Set<string>(), []);
 
   const selectedObject = selectedSlug
     ? archObjects.find((o) => o.slug === selectedSlug) ?? null
@@ -581,19 +644,24 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
     return allSteps.filter((s) => s.processes.some((p) => selectedProcessIds.includes(p)));
   }, [processSteps, selectedProcessIds]);
 
+  // orderedProcessSteps: for now same order as resolved; ordering by sequence will be wired in a later task
+  const orderedProcessSteps = resolvedProcessSteps;
+
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(
     () =>
       buildArchLayout(
         archObjects,
         selectedSlug,
-        highlightedSlugs,
+        highlightedArchSlugs,
+        highlightedStepSlugs,
         showRequires,
         setSelectedSlug,
         resolvedProcessSteps,
+        orderedProcessSteps,
         showProcessSteps,
         showArchObjects,
       ),
-    [archObjects, selectedSlug, highlightedSlugs, showRequires, resolvedProcessSteps, showProcessSteps, showArchObjects],
+    [archObjects, selectedSlug, highlightedArchSlugs, highlightedStepSlugs, showRequires, resolvedProcessSteps, orderedProcessSteps, showProcessSteps, showArchObjects],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
