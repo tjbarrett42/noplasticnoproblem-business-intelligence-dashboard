@@ -24,6 +24,8 @@ export function loadProcessSteps(): ProcessStep[] {
       architecture: Array.isArray(data.architecture) ? data.architecture : [],
       processes: Array.isArray(data.processes) ? data.processes : [],
       status: data.status ?? 'draft',
+      blockers: Array.isArray(data.blockers) ? data.blockers : [],
+      external_calls: Array.isArray(data.external_calls) ? data.external_calls : [],
       notes: data.notes ?? '',
       body: content.trim(),
     } as ProcessStep;

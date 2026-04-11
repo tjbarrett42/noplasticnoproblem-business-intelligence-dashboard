@@ -49,7 +49,7 @@ export interface OperationNode {
   body: string;
 }
 
-export type ProcessStepStatus = 'draft' | 'defined' | 'deprecated';
+export type ProcessStepStatus = 'draft' | 'designed' | 'stable' | 'deprecated';
 export type ProcessStatus = 'draft' | 'defined' | 'active' | 'deprecated';
 export type ProcessTrigger = 'user-action' | 'schedule' | 'event' | 'subprocess';
 export type StepActor = 'user' | 'system' | 'human';
@@ -77,6 +77,8 @@ export interface ProcessStep {
   architecture: ArchInteractionLink[];
   processes: string[];
   status: ProcessStepStatus;
+  blockers: string[];
+  external_calls: string[];
   notes: string;
   body: string;
 }
@@ -129,6 +131,8 @@ export interface ImplementationStep {
   status: StepStatus;
   blockers: string[];
   artifacts: { type: string; path: string; repo?: string }[];
+  affects_processes: string[];
+  affects_process_steps: string[];
   notes: string;
   body: string;
 }
