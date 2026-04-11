@@ -31,9 +31,12 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Bot,
+  User,
+  UserCheck,
   type LucideIcon,
 } from 'lucide-react';
-import type { ArchitectureObject, ImplementationStep, ArchObjectType, ArchObjectStatus, StepStatus, Process, ProcessStep } from '@/lib/types';
+import type { ArchitectureObject, ImplementationStep, ArchObjectType, ArchObjectStatus, StepStatus, StepActor, Process, ProcessStep } from '@/lib/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -54,6 +57,12 @@ const TYPE_ICONS: Record<ArchObjectType, LucideIcon> = {
   interface: Layers,
   library: Package,
   config: Settings,
+};
+
+const ACTOR_ICONS: Record<StepActor, LucideIcon> = {
+  system: Bot,
+  user: User,
+  human: UserCheck,
 };
 
 const STATUS_STYLES: Record<
@@ -233,31 +242,93 @@ const archNodeTypes: NodeTypes = { arch: ArchNode };
 
 // ─── ProcessStepNode for ArchitectureGraph overlay ────────────────────────────
 
-const PROC_STEP_W = 200;
-const PROC_STEP_H = 64;
+const PROC_STEP_W = 160;
+const PROC_STEP_H = 52;
 
-function ProcessStepNode({ data }: { data: { step: ProcessStep; isSelected: boolean } }) {
-  const { step, isSelected } = data;
-  const stripeColor = step.actor === 'system' ? '#3b82f6' : step.actor === 'user' ? '#22c55e' : '#f59e0b';
+type ProcessStepNodeData = {
+  step: ProcessStep;
+  isSelected: boolean;
+  isHighlighted: boolean;
+  onSelect: () => void;
+};
+
+function ProcessStepNode({ data }: { data: ProcessStepNodeData }) {
+  const { step, isSelected, isHighlighted, onSelect } = data;
+  const stripeColor =
+    step.actor === 'system' ? '#3b82f6'
+    : step.actor === 'user' ? '#22c55e'
+    : '#f59e0b';
+  const ActorIcon = ACTOR_ICONS[step.actor];
+
+  const interactionBadges = step.architecture.map((link) => ({
+    label: link.interaction === 'reads_from' ? '← reads'
+          : link.interaction === 'writes_to' ? 'writes →'
+          : 'calls →',
+    color: link.interaction === 'reads_from' ? '#3b82f6'
+          : link.interaction === 'writes_to' ? '#22c55e'
+          : '#a855f7',
+    bg: link.interaction === 'reads_from' ? '#eff6ff'
+       : link.interaction === 'writes_to' ? '#f0fdf4'
+       : '#faf5ff',
+  }));
+  const externalBadges = step.external_calls;
+
   return (
     <div
-      className={`relative bg-white rounded border overflow-hidden ${
-        isSelected ? 'border-indigo-500 ring-2 ring-indigo-300' : 'border-blue-200'
-      }`}
-      style={{ width: PROC_STEP_W, height: PROC_STEP_H }}
+      onClick={onSelect}
+      className="relative bg-white rounded overflow-hidden cursor-pointer"
+      style={{
+        width: PROC_STEP_W,
+        height: PROC_STEP_H,
+        border: isSelected
+          ? '1.5px solid #6366f1'
+          : isHighlighted
+          ? '1.5px solid #f97316'
+          : '1px solid #bfdbfe',
+        boxShadow: isSelected
+          ? '0 0 0 2px #c7d2fe'
+          : isHighlighted
+          ? '0 0 0 2px #fed7aa'
+          : undefined,
+        background: isHighlighted ? '#fff7ed' : undefined,
+      }}
     >
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+      {/* Actor stripe */}
       <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: stripeColor }} />
-      <div className="pl-3 pr-2 py-1.5 h-full flex flex-col justify-between">
-        <span className="text-xs font-medium text-gray-800 leading-tight line-clamp-2">{step.name}</span>
-        <span className="text-xs text-gray-400">{step.actor}</span>
+      <div className="pl-3 pr-2 pt-1.5 pb-1 h-full flex flex-col justify-between">
+        {/* Top row: actor icon + name */}
+        <div className="flex items-start gap-1">
+          <ActorIcon size={11} className="shrink-0 mt-0.5" style={{ color: stripeColor }} />
+          <span className="text-[11px] font-medium text-gray-800 leading-tight line-clamp-2">{step.name}</span>
+        </div>
+        {/* Bottom row: interaction badges */}
+        <div className="flex flex-wrap gap-0.5 mt-0.5">
+          {interactionBadges.map((b, i) => (
+            <span
+              key={i}
+              className="text-[9px] px-1 py-0.5 rounded font-medium"
+              style={{ color: b.color, background: b.bg }}
+            >
+              {b.label}
+            </span>
+          ))}
+          {externalBadges.map((name, i) => (
+            <span key={`ext-${i}`} className="text-[9px] px-1 py-0.5 rounded font-medium text-gray-500 bg-gray-100">
+              ext →
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-const combinedNodeTypes: NodeTypes = { arch: ArchNode, 'process-step': ProcessStepNode as NodeTypes['process-step'] };
+const combinedNodeTypes: NodeTypes = {
+  arch: ArchNode,
+  'process-step': ProcessStepNode as unknown as NodeTypes['process-step'],
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
