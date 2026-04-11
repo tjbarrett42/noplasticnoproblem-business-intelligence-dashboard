@@ -619,7 +619,7 @@ interface Props {
 }
 
 export default function ArchitectureGraph({ archObjects, steps, processes, processSteps, defaultShowProcessSteps, defaultShowArchObjects }: Props) {
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedStep, setSelectedStep] = useState<ImplementationStep | null>(null);
   const [stepListCollapsed, setStepListCollapsed] = useState(false);
   const [showRequires, setShowRequires] = useState(true);
@@ -631,11 +631,16 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
     () => (selectedStep ? new Set(selectedStep.architecture) : new Set<string>()),
     [selectedStep],
   );
+  const highlightedStepSlugs = useMemo(
+    () => (selectedStep ? new Set(selectedStep.affects_process_steps) : new Set<string>()),
+    [selectedStep],
+  );
 
-  const highlightedStepSlugs = useMemo(() => new Set<string>(), []);
-
-  const selectedObject = selectedSlug
-    ? archObjects.find((o) => o.slug === selectedSlug) ?? null
+  const selectedObject = selectedNodeId
+    ? archObjects.find((o) => o.slug === selectedNodeId) ?? null
+    : null;
+  const selectedProcessStepNode = selectedNodeId
+    ? (processSteps ?? []).find((s) => s.id === selectedNodeId) ?? null
     : null;
 
   const resolvedProcessSteps = useMemo(() => {
@@ -644,24 +649,32 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
     return allSteps.filter((s) => s.processes.some((p) => selectedProcessIds.includes(p)));
   }, [processSteps, selectedProcessIds]);
 
-  // orderedProcessSteps: for now same order as resolved; ordering by sequence will be wired in a later task
-  const orderedProcessSteps = resolvedProcessSteps;
+  const orderedProcessSteps = useMemo(() => {
+    if (selectedProcessIds.length !== 1) return [];
+    const proc = (processes ?? []).find((p) => p.id === selectedProcessIds[0]);
+    if (!proc) return [];
+    const allSteps = processSteps ?? [];
+    return proc.steps
+      .filter((s): s is { type: 'step'; ref: string } => s.type === 'step')
+      .map((s) => allSteps.find((ps) => ps.id === s.ref))
+      .filter((s): s is ProcessStep => s !== undefined);
+  }, [processes, processSteps, selectedProcessIds]);
 
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(
     () =>
       buildArchLayout(
         archObjects,
-        selectedSlug,
+        selectedNodeId,
         highlightedArchSlugs,
         highlightedStepSlugs,
         showRequires,
-        setSelectedSlug,
+        setSelectedNodeId,
         resolvedProcessSteps,
         orderedProcessSteps,
         showProcessSteps,
         showArchObjects,
       ),
-    [archObjects, selectedSlug, highlightedArchSlugs, highlightedStepSlugs, showRequires, resolvedProcessSteps, orderedProcessSteps, showProcessSteps, showArchObjects],
+    [archObjects, selectedNodeId, highlightedArchSlugs, highlightedStepSlugs, showRequires, resolvedProcessSteps, orderedProcessSteps, showProcessSteps, showArchObjects],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
@@ -784,7 +797,7 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
                     return (
                       <button
                         key={slug}
-                        onClick={() => setSelectedSlug(selectedSlug === slug ? null : slug)}
+                        onClick={() => setSelectedNodeId(selectedNodeId === slug ? null : slug)}
                         className="w-full text-left flex items-center gap-1.5 px-2 py-1 rounded hover:bg-gray-50 transition-colors"
                       >
                         {ss && (
@@ -908,7 +921,7 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
             maxZoom={2}
             nodesDraggable={false}
             nodesConnectable={false}
-            onPaneClick={() => setSelectedSlug(null)}
+            onPaneClick={() => setSelectedNodeId(null)}
           >
             <Background color="#e5e7eb" gap={20} />
             <Controls showInteractive={false} />
@@ -926,7 +939,7 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
                 <span className="text-xs text-gray-500">{selectedObject.type}</span>
               </div>
               <button
-                onClick={() => setSelectedSlug(null)}
+                onClick={() => setSelectedNodeId(null)}
                 className="text-gray-400 hover:text-gray-600 text-xl leading-none ml-2 shrink-0"
               >
                 ×
@@ -978,7 +991,7 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
                     {requiredBy.map((o) => (
                       <button
                         key={o.slug}
-                        onClick={() => setSelectedSlug(o.slug)}
+                        onClick={() => setSelectedNodeId(o.slug)}
                         className="w-full text-left flex items-center gap-1.5 px-2 py-1 rounded hover:bg-gray-50 transition-colors"
                       >
                         <span className="text-gray-700 font-medium">{o.node}</span>
