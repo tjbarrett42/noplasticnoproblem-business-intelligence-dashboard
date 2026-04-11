@@ -285,7 +285,6 @@ function buildArchLayout(
   selectedSlug: string | null,
   highlightedSlugs: Set<string>,
   showRequires: boolean,
-  showDataFlow: boolean,
   onSelectNode: (slug: string | null) => void,
   resolvedProcessSteps: ProcessStep[] = [],
   showProcessSteps = false,
@@ -423,33 +422,6 @@ function buildArchLayout(
     });
   }
 
-  if (showDataFlow) {
-    const dataFlowEdgeDefs: { field: keyof ArchitectureObject; color: string; label: string }[] = [
-      { field: 'reads_from', color: '#3b82f6', label: 'reads' },
-      { field: 'writes_to',  color: '#22c55e', label: 'writes' },
-      { field: 'calls',      color: '#a855f7', label: 'calls' },
-    ];
-    dataFlowEdgeDefs.forEach(({ field, color, label }) => {
-      objects.forEach((o) => {
-        const targets = o[field] as string[];
-        targets.forEach((target) => {
-          if (!slugSet.has(target)) return;
-          if (containmentPairs.has(`${o.slug}→${target}`)) return;
-          edges.push({
-            id: `${field}:${o.slug}->${target}`,
-            type: 'floating',
-            source: o.slug,
-            target,
-            label,
-            markerEnd: { type: MarkerType.ArrowClosed, color },
-            style: { stroke: color, strokeWidth: 1.5 },
-            labelStyle: { fontSize: 10, fill: color },
-          });
-        });
-      });
-    });
-  }
-
   // ── Process step nodes ──────────────────────────────────────────────────────
   if (showProcessSteps && resolvedProcessSteps.length > 0) {
     // Add process step nodes to dagre (outside arch containment hierarchy)
@@ -518,7 +490,6 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
   const [selectedStep, setSelectedStep] = useState<ImplementationStep | null>(null);
   const [stepListCollapsed, setStepListCollapsed] = useState(false);
   const [showRequires, setShowRequires] = useState(true);
-  const [showDataFlow, setShowDataFlow] = useState(false);
   const [showProcessSteps, setShowProcessSteps] = useState(defaultShowProcessSteps ?? false);
   const [showArchObjects, setShowArchObjects] = useState(defaultShowArchObjects ?? true);
   const [selectedProcessIds, setSelectedProcessIds] = useState<string[]>([]);
@@ -545,13 +516,12 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
         selectedSlug,
         highlightedSlugs,
         showRequires,
-        showDataFlow,
         setSelectedSlug,
         resolvedProcessSteps,
         showProcessSteps,
         showArchObjects,
       ),
-    [archObjects, selectedSlug, highlightedSlugs, showRequires, showDataFlow, resolvedProcessSteps, showProcessSteps, showArchObjects],
+    [archObjects, selectedSlug, highlightedSlugs, showRequires, resolvedProcessSteps, showProcessSteps, showArchObjects],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
@@ -778,15 +748,6 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
               className="rounded"
             />
             Requires edges
-          </label>
-          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={showDataFlow}
-              onChange={(e) => setShowDataFlow(e.target.checked)}
-              className="rounded"
-            />
-            Data flow edges
           </label>
           {archObjects.length === 0 && (
             <span className="text-xs text-gray-400 ml-2">No architecture objects in wiki/architecture/</span>
