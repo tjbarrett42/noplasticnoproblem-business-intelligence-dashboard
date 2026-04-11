@@ -161,20 +161,21 @@ type ArchNodeData = {
   object: ArchitectureObject;
   isSelected: boolean;
   isHighlighted: boolean;
+  isDimmed: boolean;
   onClick: () => void;
   containerHeight?: number;
   containerWidth?: number;
 };
 
 function ArchNode({ data }: { data: ArchNodeData }) {
-  const { object, isSelected, isHighlighted, onClick, containerHeight, containerWidth } = data;
+  const { object, isSelected, isHighlighted, isDimmed, onClick, containerHeight, containerWidth } = data;
   const styles = STATUS_STYLES[object.status];
   const Icon = TYPE_ICONS[object.type];
   const hasBlockers = object.blockers.length > 0;
   const isContainer = containerHeight !== undefined;
 
   return (
-    <>
+    <div style={{ opacity: isDimmed ? 0.3 : 1, transition: 'opacity 0.15s' }}>
       <Handle type="target" position={Position.Left} style={{ opacity: 0, width: 1, height: 1 }} />
       <div
         onClick={onClick}
@@ -234,7 +235,7 @@ function ArchNode({ data }: { data: ArchNodeData }) {
         )}
       </div>
       <Handle type="source" position={Position.Right} style={{ opacity: 0, width: 1, height: 1 }} />
-    </>
+    </div>
   );
 }
 
