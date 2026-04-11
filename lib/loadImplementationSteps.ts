@@ -33,6 +33,8 @@ export function loadImplementationSteps(): ImplementationStep[] {
       status: data.status ?? 'ready',
       blockers: Array.isArray(data.blockers) ? data.blockers : [],
       artifacts,
+      affects_processes: Array.isArray(data.affects_processes) ? data.affects_processes : [],
+      affects_process_steps: Array.isArray(data.affects_process_steps) ? data.affects_process_steps : [],
       notes: data.notes ?? '',
       body: content.trim(),
     } as ImplementationStep;
