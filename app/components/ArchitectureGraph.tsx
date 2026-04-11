@@ -36,7 +36,7 @@ import {
   UserCheck,
   type LucideIcon,
 } from 'lucide-react';
-import type { ArchitectureObject, ImplementationStep, ArchObjectType, ArchObjectStatus, StepStatus, StepActor, Process, ProcessStep } from '@/lib/types';
+import type { ArchitectureObject, ImplementationStep, ArchObjectType, ArchObjectStatus, StepStatus, StepActor, Process, ProcessStep, ProcessStepStatus } from '@/lib/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -83,7 +83,7 @@ const STEP_STATUS_STYLES: Record<StepStatus, { dot: string; badge: string }> = {
   abandoned:   { dot: 'bg-gray-400',   badge: 'bg-gray-100 text-gray-500' },
 };
 
-const PROCESS_STEP_STATUS_STYLES: Record<string, { badge: string }> = {
+const PROCESS_STEP_STATUS_STYLES: Record<ProcessStepStatus, { badge: string }> = {
   draft:      { badge: 'bg-gray-100 text-gray-600' },
   designed:   { badge: 'bg-blue-100 text-blue-800' },
   stable:     { badge: 'bg-green-100 text-green-800' },
@@ -322,7 +322,7 @@ function ProcessStepNode({ data }: { data: ProcessStepNodeData }) {
               {b.label}
             </span>
           ))}
-          {externalBadges.map((name, i) => (
+          {externalBadges.map((_name, i) => (
             <span key={`ext-${i}`} className="text-[9px] px-1 py-0.5 rounded font-medium text-gray-500 bg-gray-100">
               ext →
             </span>
@@ -370,6 +370,7 @@ function buildArchLayout(
   orderedProcessSteps: ProcessStep[],
   showProcessSteps: boolean,
   showArchObjects: boolean,
+  suppressDimming: boolean,
 ): { nodes: Node[]; edges: Edge[] } {
   const slugSet = new Set(objects.map((o) => o.slug));
 
@@ -403,7 +404,10 @@ function buildArchLayout(
       });
     });
   }
-  const shouldDim = showProcessSteps && resolvedProcessSteps.length > 0 && highlightedArchSlugs.size === 0;
+  const shouldDim = !suppressDimming
+    && showProcessSteps
+    && resolvedProcessSteps.length > 0
+    && highlightedArchSlugs.size === 0;
 
   // ── Dagre layout — top-level nodes only ──────────────────────────────────
   const g = new dagre.graphlib.Graph();
@@ -743,8 +747,9 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
         orderedProcessSteps,
         showProcessSteps,
         showArchObjects,
+        !!selectedStep,           // suppressDimming
       ),
-    [archObjects, selectedNodeId, highlightedArchSlugs, highlightedStepSlugs, showRequires, resolvedProcessSteps, orderedProcessSteps, showProcessSteps, showArchObjects],
+    [archObjects, selectedNodeId, highlightedArchSlugs, highlightedStepSlugs, showRequires, resolvedProcessSteps, orderedProcessSteps, showProcessSteps, showArchObjects, selectedStep],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
