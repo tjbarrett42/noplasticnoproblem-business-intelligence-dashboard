@@ -81,6 +81,7 @@ Process `steps` lists can contain `{type: subprocess, ref}` entries. These are n
   - `calls →` (purple) for `calls`
   - Font: `text-[10px]`, pill shape, colored background + text
   - No labels on edges — all interaction semantics live on the node
+- **`external_calls` field** (third-party API names, not arch objects): shown as a `ext →` gray badge per entry. No edges are drawn — external calls have no arch node targets in the graph.
 
 ### Edges (process selected)
 
@@ -107,7 +108,7 @@ Dimming does **not** apply when an implementation step is selected from the left
 - `highlightedArchSlugs: Set<string>` — from `selectedStep.architecture`
 - `highlightedStepSlugs: Set<string>` — from `selectedStep.affects_process_steps ?? []`
 
-Both sets drive the same orange border + warm background highlight treatment on their respective node types. Process step nodes in `highlightedStepSlugs` use the same `isHighlighted` prop already defined on `ProcessStepNode`.
+Both sets drive the same orange border + warm background highlight treatment on their respective node types. `ProcessStepNode` must be updated to accept an `isHighlighted: boolean` prop (not currently present) and apply the same orange border + warm background treatment as arch nodes when true.
 
 ---
 
