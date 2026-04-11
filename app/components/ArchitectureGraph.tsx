@@ -83,6 +83,13 @@ const STEP_STATUS_STYLES: Record<StepStatus, { dot: string; badge: string }> = {
   abandoned:   { dot: 'bg-gray-400',   badge: 'bg-gray-100 text-gray-500' },
 };
 
+const PROCESS_STEP_STATUS_STYLES: Record<string, { badge: string }> = {
+  draft:      { badge: 'bg-gray-100 text-gray-600' },
+  designed:   { badge: 'bg-blue-100 text-blue-800' },
+  stable:     { badge: 'bg-green-100 text-green-800' },
+  deprecated: { badge: 'bg-gray-50 text-gray-400' },
+};
+
 // ─── Floating edge helpers ────────────────────────────────────────────────────
 
 /**
@@ -934,10 +941,9 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
         <div className="w-80 shrink-0 border-l border-gray-200 bg-white overflow-y-auto">
           <div className="p-4 border-b border-gray-100">
             <div className="flex items-start justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                {React.createElement(TYPE_ICONS[selectedObject.type], { size: 14, className: 'text-gray-500 shrink-0 mt-0.5' })}
-                <span className="text-xs text-gray-500">{selectedObject.type}</span>
-              </div>
+              <span className="text-xs px-2 py-0.5 rounded font-medium bg-indigo-100 text-indigo-800">
+                Architecture Object
+              </span>
               <button
                 onClick={() => setSelectedNodeId(null)}
                 className="text-gray-400 hover:text-gray-600 text-xl leading-none ml-2 shrink-0"
@@ -1055,6 +1061,148 @@ export default function ArchitectureGraph({ archObjects, steps, processes, proce
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Process step detail panel ── */}
+      {selectedProcessStepNode && !selectedObject && (
+        <div className="w-80 shrink-0 border-l border-gray-200 bg-white overflow-y-auto flex flex-col">
+          {/* Header */}
+          <div className="p-4 border-b border-gray-100 shrink-0">
+            <div className="flex items-start justify-between mb-2">
+              <span className="text-xs px-2 py-0.5 rounded font-medium bg-blue-100 text-blue-800">
+                Process Step
+              </span>
+              <button
+                onClick={() => setSelectedNodeId(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none ml-2 shrink-0"
+              >
+                ×
+              </button>
+            </div>
+            <div className="font-bold text-gray-900 text-sm mb-2">{selectedProcessStepNode.name}</div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                PROCESS_STEP_STATUS_STYLES[selectedProcessStepNode.status]?.badge ?? 'bg-gray-100 text-gray-600'
+              }`}>
+                {selectedProcessStepNode.status}
+              </span>
+              <span className="flex items-center gap-1 text-xs text-gray-500">
+                {React.createElement(ACTOR_ICONS[selectedProcessStepNode.actor], { size: 11 })}
+                {selectedProcessStepNode.actor}
+              </span>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="p-4 space-y-4 text-xs flex-1 overflow-y-auto">
+            {/* Blockers */}
+            {selectedProcessStepNode.blockers.length > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded p-3">
+                <div className="font-semibold text-orange-700 mb-1.5 uppercase tracking-wide text-xs">Blockers</div>
+                <ul className="space-y-1.5">
+                  {selectedProcessStepNode.blockers.map((b, i) => (
+                    <li key={i} className="text-orange-800 leading-snug">• {b}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Interactions */}
+            {selectedProcessStepNode.architecture.length > 0 && (
+              <div>
+                <div className="font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Interactions</div>
+                <div className="space-y-1">
+                  {selectedProcessStepNode.architecture.map((link, i) => {
+                    const obj = archObjects.find((o) => o.slug === link.object);
+                    const color =
+                      link.interaction === 'reads_from' ? '#3b82f6'
+                      : link.interaction === 'writes_to' ? '#22c55e'
+                      : '#a855f7';
+                    const label =
+                      link.interaction === 'reads_from' ? '← reads'
+                      : link.interaction === 'writes_to' ? 'writes →'
+                      : 'calls →';
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => obj && setSelectedNodeId(obj.slug)}
+                        className="w-full text-left flex items-center gap-1.5 px-2 py-1 rounded hover:bg-gray-50 transition-colors"
+                      >
+                        <span className="text-[10px] px-1 py-0.5 rounded font-medium shrink-0"
+                          style={{ color, background: color + '1a' }}>
+                          {label}
+                        </span>
+                        <span className="text-gray-700 font-medium">{obj?.node ?? link.object}</span>
+                        {obj && (
+                          <span className={`ml-auto text-xs px-1 py-0.5 rounded ${STATUS_STYLES[obj.status].badge}`}>
+                            {obj.status}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* External calls */}
+            {selectedProcessStepNode.external_calls.length > 0 && (
+              <div>
+                <div className="font-semibold text-gray-500 uppercase tracking-wide mb-1.5">External calls</div>
+                <div className="text-gray-600">{selectedProcessStepNode.external_calls.join(', ')}</div>
+              </div>
+            )}
+
+            {/* Processes */}
+            {selectedProcessStepNode.processes.length > 0 && (
+              <div>
+                <div className="font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Processes</div>
+                <div className="text-gray-600">{selectedProcessStepNode.processes.join(', ')}</div>
+              </div>
+            )}
+
+            {/* Notes */}
+            {selectedProcessStepNode.body && (
+              <div>
+                <div className="font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes</div>
+                <p className="text-gray-600 leading-relaxed">
+                  {selectedProcessStepNode.body.split('\n\n')[0].slice(0, 300)}
+                  {selectedProcessStepNode.body.split('\n\n')[0].length > 300 ? '…' : ''}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Traversal footer */}
+          {orderedProcessSteps.length > 0 && (() => {
+            const idx = orderedProcessSteps.findIndex((s) => s.id === selectedProcessStepNode.id);
+            const prev = idx > 0 ? orderedProcessSteps[idx - 1] : null;
+            const next = idx >= 0 && idx < orderedProcessSteps.length - 1 ? orderedProcessSteps[idx + 1] : null;
+            if (!prev && !next) return null;
+            return (
+              <div className="shrink-0 border-t border-gray-100 p-2 flex justify-between gap-1">
+                {prev ? (
+                  <button
+                    onClick={() => setSelectedNodeId(prev.id)}
+                    className="flex-1 text-left text-xs px-2 py-1.5 rounded hover:bg-gray-50 text-gray-600 transition-colors truncate"
+                    title={prev.name}
+                  >
+                    ← {prev.name}
+                  </button>
+                ) : <div className="flex-1" />}
+                {next ? (
+                  <button
+                    onClick={() => setSelectedNodeId(next.id)}
+                    className="flex-1 text-right text-xs px-2 py-1.5 rounded hover:bg-gray-50 text-gray-600 transition-colors truncate"
+                    title={next.name}
+                  >
+                    {next.name} →
+                  </button>
+                ) : <div className="flex-1" />}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
